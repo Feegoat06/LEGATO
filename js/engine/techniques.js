@@ -13,7 +13,17 @@ export const TECHNIQUES = Object.freeze({
 });
 
 function rootPc(chord) {
-  return ((chord.hint?.rootMidi ?? chord.notes[0]) % 12 + 12) % 12;
+  // The stored hint is display-only by contract. Infer a root from exact pitch
+  // classes when they match a supported quality; otherwise use the lowest note
+  // as a small, deterministic fallback without adding anything to stored state.
+  const actual = [...new Set(chord.notes.map((note) => ((note % 12) + 12) % 12))].sort((a, b) => a - b);
+  for (const quality of ['Major', 'Minor', 'Dom7', 'Min7', 'Dim7', 'Sus4', 'Maj7', 'Dim', 'm7b5', 'Sus2', 'Aug']) {
+    for (let root = 0; root < 12; root += 1) {
+      const expected = [...new Set(chordPcs(root, quality))].sort((a, b) => a - b);
+      if (actual.length === expected.length && actual.every((pc, index) => pc === expected[index])) return root;
+    }
+  }
+  return ((Math.min(...chord.notes) % 12) + 12) % 12;
 }
 
 function chordPcs(root, quality) {

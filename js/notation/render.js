@@ -5,7 +5,7 @@ const FLATS = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
 
 function keyString(midi, key) {
   const names = key < 0 ? FLATS : SHARPS;
-  return `${names[midi % 12]}/${Math.floor(midi / 12) - 1}`;
+  return `${names[((midi % 12) + 12) % 12]}/${Math.floor(midi / 12) - 1}`;
 }
 
 function resolvedClef(segments, setting) {
@@ -14,48 +14,83 @@ function resolvedClef(segments, setting) {
   return (notes[Math.floor(notes.length / 2)] ?? 60) < 60 ? 'bass' : 'treble';
 }
 
+function styleModifiers(stave, color) {
+  stave.getModifiers().forEach((modifier) => modifier.setStyle({ fillStyle: color, strokeStyle: color }));
+}
+
 export function renderNotation(container, segments, settings) {
   const VF = window.Vex?.Flow ?? window.VexFlow;
-  if (!VF) {
-    container.innerHTML = '<div class="notice">Notation library is loading…</div>';
-    return;
-  }
   container.replaceChildren();
+  if (!VF) {
+    container.innerHTML = '<div class="notice">Notation is still loading. Refresh if this message remains.</div>';
+    return { measureCount: 0 };
+  }
   if (!segments.length) {
     container.innerHTML = '<div class="notice">Add a chord to begin the score.</div>';
-    return;
+    return { measureCount: 0 };
   }
-  const measures = Math.max(...segments.map((segment) => segment.measureIndex)) + 1;
-  const width = Math.max(760, Math.min(1120, container.clientWidth || 900));
-  const height = measures * 150 + 30;
+
+  const measureCount = Math.max(...segments.map((segment) => segment.measureIndex)) + 1;
+  const width = Math.max(600, container.clientWidth || 820);
+  const staveWidth = Math.max(230, Math.min(360, (width - 36) / Math.min(2, measureCount)));
+  const columns = Math.max(1, Math.floor((width - 20) / staveWidth));
+  const rows = Math.ceil(measureCount / columns);
+  const rowHeight = 150;
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(width, height);
+  renderer.resize(width, rows * rowHeight + 20);
   const context = renderer.getContext();
   const clef = resolvedClef(segments, settings.clef);
-  for (let measure = 0; measure < measures; measure += 1) {
-    const stave = new VF.Stave(12, 18 + measure * 145, width - 24);
-    stave.setAttribute('data-measure', String(measure));
-    stave.addClef(clef).addTimeSignature(`${settings.timeSig.num}/${settings.timeSig.den}`);
-    stave.addKeySignature(KEY_SIGNATURES[settings.key + 7]);
-    stave.setContext(context).draw();
+  const staffColor = '#7a664b';
+  const userColor = '#e6ceaa';
+  const techniqueColor = '#d1a15a';
+  const notesBySource = [];
+
+  for (let measure = 0; measure < measureCount; measure += 1) {
+    const column = measure % columns;
+    const row = Math.floor(measure / columns);
+    const x = 10 + column * staveWidth;
+    const y = 16 + row * rowHeight;
+    context.openGroup('measure-group', `measure-${measure}`, { 'data-measure': String(measure) });
+    const stave = new VF.Stave(x, y, staveWidth);
+    if (column === 0) {
+      stave.addClef(clef).addTimeSignature(`${settings.timeSig.num}/${settings.timeSig.den}`).addKeySignature(KEY_SIGNATURES[settings.key + 7]);
+    }
+    styleModifiers(stave, staffColor);
+    context.setStrokeStyle(staffColor); context.setFillStyle(staffColor);
+    stave.setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
     const measureSegments = segments.filter((segment) => segment.measureIndex === measure);
-    const notes = measureSegments.map((segment) => {
+    const staveNotes = measureSegments.map((segment) => {
       const staveNote = new VF.StaveNote({
-        clef, keys: segment.notes.map((midi) => keyString(midi, settings.key)),
+        clef,
+        keys: segment.notes.map((midi) => keyString(midi, settings.key)),
         duration: DURATIONS.get(segment.durationBeats) ?? 'q',
       });
       segment.notes.forEach((midi, index) => {
-        const name = keyString(midi, settings.key).split('/')[0];
-        if (name.length > 1) staveNote.addModifier(new VF.Accidental(name.slice(1)), index);
+        const accidental = keyString(midi, settings.key).split('/')[0].slice(1);
+        if (accidental) staveNote.addModifier(new VF.Accidental(accidental), index);
       });
-      if (segment.isTechnique) staveNote.setStyle({ fillStyle: '#d86f42', strokeStyle: '#d86f42' });
+      const color = segment.isTechnique ? techniqueColor : userColor;
+      staveNote.setStyle({ fillStyle: color, strokeStyle: color });
+      notesBySource.push({ segment, note: staveNote });
       return staveNote;
     });
-    if (notes.length) {
+    if (staveNotes.length) {
       const voice = new VF.Voice({ num_beats: settings.timeSig.num, beat_value: settings.timeSig.den }).setMode(VF.Voice.Mode.SOFT);
-      voice.addTickables(notes);
-      new VF.Formatter().joinVoices([voice]).format([voice], width - 180);
+      voice.addTickables(staveNotes);
+      new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
     }
+    context.closeGroup();
   }
+
+  for (let index = 0; index < notesBySource.length - 1; index += 1) {
+    const current = notesBySource[index];
+    const next = notesBySource[index + 1];
+    if (current.segment.sourceId !== next.segment.sourceId) continue;
+    const count = Math.min(current.note.keys.length, next.note.keys.length);
+    const indices = Array.from({ length: count }, (_, noteIndex) => noteIndex);
+    new VF.StaveTie({ first_note: current.note, last_note: next.note, first_indices: indices, last_indices: indices })
+      .setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+  }
+  return { measureCount };
 }

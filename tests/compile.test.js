@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, makeChord, makeProgression } from '../js/state.js';
+import { availableBeats, compile, makeChord, makeProgression } from '../js/state.js';
 import { TECHNIQUES } from '../js/engine/techniques.js';
 
 const settings={tempo:100,timeSig:{num:4,den:4},key:0,clef:'auto'};
@@ -37,4 +37,43 @@ test('compiled startBeat is measure-relative and tempo does not alter compile ou
   const p=makeProgression({settings:{...settings,tempo:80},chords:[makeChord([60,64,67],2)],seams:[]});
   const first=compile(p); p.settings.tempo=150; const second=compile(p);
   assert.deepEqual(first,second); assert.ok(first.every(s=>s.startBeat>=0&&s.startBeat<4));
+});
+
+test('compiled duration fills the nominal progression duration without overflow', () => {
+  const p=makeProgression({settings,chords:[makeChord([60,64,67],1),makeChord([65,69,72],1.5)],seams:['secondaryDom']});
+  const segments=compile(p);
+  assert.equal(segments.reduce((sum,s)=>sum+s.durationBeats,0),10);
+});
+
+test('cross-measure splits retain source id and measure-relative positions', () => {
+  const chord=makeChord([60,64,67],1.5);
+  const segments=compile(makeProgression({settings,chords:[chord],seams:[]}));
+  assert.ok(segments.length>1);
+  assert.ok(segments.every((segment)=>segment.sourceId===chord.id));
+  assert.ok(segments.some((segment)=>segment.measureIndex===1&&segment.startBeat===0));
+});
+
+test('unknown technique behaves like direct transition and warns', () => {
+  const chords=[makeChord([60,64,67]),makeChord([65,69,72])];
+  const direct=compile(makeProgression({settings,chords,seams:[null]}));
+  const originalWarn=console.warn; let warned=false; console.warn=()=>{warned=true;};
+  const unknown=compile(makeProgression({settings,chords,seams:['unknownTechnique']}));
+  console.warn=originalWarn;
+  assert.deepEqual(unknown,direct); assert.equal(warned,true);
+});
+
+test('beat availability excludes techniques that cost too much', () => {
+  const budget=availableBeats(.5*4);
+  assert.equal(budget,1);
+  assert.equal(TECHNIQUES.scaleRun.beatCost>budget,true);
+  assert.equal(TECHNIQUES.leadingTone.beatCost<=budget,true);
+});
+
+test('display hint changes never alter compiled output', () => {
+  const from=makeChord([60,64,67],1,{rootMidi:60,quality:'Major'});
+  const to=makeChord([65,69,72],1,{rootMidi:65,quality:'Major'});
+  const p=makeProgression({settings,chords:[from,to],seams:['secondaryDom']});
+  const first=compile(p);
+  to.hint={rootMidi:61,quality:'Dim7'};
+  assert.deepEqual(compile(p),first);
 });

@@ -1,33 +1,93 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>LEGATO · Harmonic learning studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="LEGATO is an interactive AI music tutor for composing, hearing, and understanding chord transitions.">
+  <title>LEGATO — Progression Coach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="#">LEGATO<span>.</span></a><p>Harmonic learning studio</p><button id="reset-example" class="ghost">Reset example</button></header>
-  <main>
-    <section class="hero"><div><span class="eyebrow">Compose · hear · understand</span><h1>Make every transition<br><em>say something.</em></h1></div><p>Shape exact piano voicings, weave harmonic connections between them, and ask an AI tutor to unpack what your ears discover.</p></section>
-    <section class="controls panel" aria-label="Score and playback controls">
-      <button id="play" class="primary">▶ Play</button><button id="stop" class="ghost">■ Stop</button>
-      <label>Tempo <input id="tempo" type="range" min="40" max="180" value="96"><span id="tempo-value">96 BPM</span></label>
-      <label>Meter <select id="time-signature"><option>3/4</option><option selected>4/4</option><option>5/4</option><option>6/8</option></select></label>
-      <label>Key <select id="key-signature"><option value="-3">E♭</option><option value="-2">B♭</option><option value="-1">F</option><option value="0" selected>C</option><option value="1">G</option><option value="2">D</option><option value="3">A</option></select></label>
-      <label>Clef <select id="clef"><option value="auto">Auto</option><option value="treble">Treble</option><option value="bass">Bass</option></select></label>
-    </section>
-    <section class="workspace"><div class="main-column">
-      <section class="panel section"><div class="section-head"><div><span class="eyebrow">01 · Material</span><h2>Your chords</h2></div><button id="add-chord" class="primary">＋ Add chord</button></div><div id="chord-list" class="chord-list"></div></section>
-      <section class="panel section"><div class="section-head"><div><span class="eyebrow">02 · Score</span><h2>Compiled progression</h2></div><div class="legend"><span>User material</span><span class="generated">Technique</span></div></div><div id="score" class="score"></div></section>
-    </div><aside>
-      <section class="panel section"><span class="eyebrow">03 · Connections</span><h2>Transition seams</h2><p class="lede">Options adapt to the departing chord’s available beat budget.</p><div id="seam-list" class="seam-list"></div></section>
-      <section class="panel section coach"><span class="eyebrow">04 · AI tutor</span><h2>Hear the why</h2><div id="coach-output"><p class="empty">Select a seam and ask why it works.</p></div></section>
-    </aside></section>
-  </main>
-  <dialog id="piano-dialog"><div class="dialog-head"><div><span class="eyebrow">Explicit voicing</span><h2>Shape a chord</h2></div><button id="modal-cancel" class="ghost" aria-label="Close">×</button></div><div class="modal-controls"><label>Root<select id="modal-root"></select></label><label>Quality<select id="modal-quality"></select></label><label>Bars<input id="modal-bars" type="number" min="0.5" step="0.5" value="1"></label></div><p class="modal-help">Choose a quality for a starting voicing, then toggle individual keys. The exact MIDI notes below are what LEGATO stores and plays.</p><div id="piano-keys" class="piano"></div><div id="selected-notes" class="selected-notes"></div><div class="dialog-actions"><button id="modal-save" class="primary">Save exact voicing</button></div></dialog>
+  <div class="app-shell">
+    <aside class="editor-pane">
+      <header class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div><a class="brand" href="#">LEGATO</a><p>Progression coach</p></div>
+        <span class="build-tag">EDU / 01</span>
+      </header>
+
+      <div class="editor-scroll">
+        <section class="intro-block">
+          <p class="kicker">Composition workspace</p>
+          <h1>Build the space<br><em>between chords.</em></h1>
+          <p class="intro-copy">Place exact piano voicings, shape the connective tissue, then listen for what changed.</p>
+        </section>
+
+        <section class="editor-section" aria-labelledby="score-settings-title">
+          <div class="section-title"><span>01</span><h2 id="score-settings-title">Score settings</h2></div>
+          <div class="settings-grid">
+            <label class="tempo-control"><span>Tempo</span><div><input id="tempo" type="range" min="40" max="180" value="96"><output id="tempo-value">96</output><small>BPM</small></div></label>
+            <label><span>Meter</span><select id="time-signature"><option>3/4</option><option selected>4/4</option><option>5/4</option><option>7/4</option><option>6/8</option></select></label>
+            <label><span>Key signature</span><select id="key-signature"><option value="-3">E♭ · 3 flats</option><option value="-2">B♭ · 2 flats</option><option value="-1">F · 1 flat</option><option value="0" selected>C · no accidentals</option><option value="1">G · 1 sharp</option><option value="2">D · 2 sharps</option><option value="3">A · 3 sharps</option></select></label>
+            <label><span>Clef</span><select id="clef"><option value="auto">Auto</option><option value="treble">Treble</option><option value="bass">Bass</option></select></label>
+          </div>
+          <p class="field-note">Key signature controls notation spelling only.</p>
+        </section>
+
+        <section class="editor-section" aria-labelledby="chords-title">
+          <div class="section-title"><span>02</span><h2 id="chords-title">Chord material</h2><button id="add-chord" class="text-action">+ Add chord</button></div>
+          <div class="table-head"><span>Voicing</span><span>Bars</span><span></span></div>
+          <div id="chord-list" class="chord-list"></div>
+        </section>
+
+        <section class="editor-section" aria-labelledby="seams-title">
+          <div class="section-title"><span>03</span><h2 id="seams-title">Transitions</h2></div>
+          <p class="section-copy">Techniques appear only when the departing chord has enough space.</p>
+          <div id="seam-list" class="seam-list"></div>
+        </section>
+      </div>
+    </aside>
+
+    <main class="score-pane">
+      <header class="score-header">
+        <div><p class="kicker">Compiled score</p><h2>Your progression</h2></div>
+        <div class="score-meta"><span><i class="user-dot"></i>User voicing</span><span><i class="technique-dot"></i>Technique</span><span id="score-summary">0 measures</span></div>
+      </header>
+
+      <section class="notation-stage" aria-label="Progression notation">
+        <div class="staff-glow" aria-hidden="true"></div>
+        <div id="score" class="score"></div>
+      </section>
+
+      <section class="transport" aria-label="Playback controls">
+        <div class="transport-buttons"><button id="play" class="play-button"><span>▶</span> Play progression</button><button id="stop" class="stop-button">■ Stop</button></div>
+        <div class="transport-status"><span id="playback-pulse"></span><output id="playback-status">Ready to listen</output></div>
+        <button id="reset-example" class="reset-button">↺ Reload example</button>
+      </section>
+
+      <section class="coach-panel" aria-labelledby="coach-title">
+        <div class="coach-heading"><div><p class="kicker">04 · AI tutor</p><h2 id="coach-title">Understand the transition</h2></div><p id="coach-context">Select a seam, then ask LEGATO to explain the exact notes you hear.</p></div>
+        <div id="coach-output" class="coach-output"><div class="coach-empty"><span>∿</span><p>Your grounded explanation will appear here.</p></div></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="piano-dialog">
+    <form method="dialog" class="dialog-shell" onsubmit="return false">
+      <header class="dialog-header"><div><p class="kicker">Explicit MIDI voicing</p><h2>Shape the chord</h2><p>Choose a harmonic starting point, then toggle any key to control octave, doubling, and inversion.</p></div><button id="modal-cancel" class="close-button" aria-label="Close chord editor">×</button></header>
+      <div class="modal-controls"><label><span>Root</span><select id="modal-root"></select></label><label><span>Quality</span><select id="modal-quality"></select></label><label><span>Duration</span><select id="modal-bars"><option value="0.5">½ bar</option><option value="1" selected>1 bar</option><option value="1.5">1½ bars</option><option value="2">2 bars</option><option value="3">3 bars</option><option value="4">4 bars</option></select></label><button id="apply-quality" class="outline-button" type="button">Reset quality voicing</button></div>
+      <div class="piano-instruction"><span>21</span><p>Full piano range · click keys to toggle exact notes</p><span>108</span></div>
+      <div id="piano-keys" class="piano" role="group" aria-label="Piano note selector"></div>
+      <div class="selection-readout"><div><span>Selected MIDI notes</span><strong id="selected-midi">—</strong></div><div><span>Pitch names</span><strong id="selected-notes">No notes selected</strong></div></div>
+      <footer class="dialog-footer"><p id="voicing-status">The exact selected notes are stored—never an inversion preset.</p><button id="modal-save" class="save-button" type="button">Save exact voicing <span>→</span></button></footer>
+    </form>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
   <script type="module" src="/js/main.js"></script>
-</body></html>
+</body>
+</html>
