@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LEGATO · Harmonic learning studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="#">LEGATO<span>.</span></a><p>Harmonic learning studio</p><button id="reset-example" class="ghost">Reset example</button></header>
+  <main>
+    <section class="hero"><div><span class="eyebrow">Compose · hear · understand</span><h1>Make every transition<br><em>say something.</em></h1></div><p>Shape exact piano voicings, weave harmonic connections between them, and ask an AI tutor to unpack what your ears discover.</p></section>
+    <section class="controls panel" aria-label="Score and playback controls">
+      <button id="play" class="primary">▶ Play</button><button id="stop" class="ghost">■ Stop</button>
+      <label>Tempo <input id="tempo" type="range" min="40" max="180" value="96"><span id="tempo-value">96 BPM</span></label>
+      <label>Meter <select id="time-signature"><option>3/4</option><option selected>4/4</option><option>5/4</option><option>6/8</option></select></label>
+      <label>Key <select id="key-signature"><option value="-3">E♭</option><option value="-2">B♭</option><option value="-1">F</option><option value="0" selected>C</option><option value="1">G</option><option value="2">D</option><option value="3">A</option></select></label>
+      <label>Clef <select id="clef"><option value="auto">Auto</option><option value="treble">Treble</option><option value="bass">Bass</option></select></label>
+    </section>
+    <section class="workspace"><div class="main-column">
+      <section class="panel section"><div class="section-head"><div><span class="eyebrow">01 · Material</span><h2>Your chords</h2></div><button id="add-chord" class="primary">＋ Add chord</button></div><div id="chord-list" class="chord-list"></div></section>
+      <section class="panel section"><div class="section-head"><div><span class="eyebrow">02 · Score</span><h2>Compiled progression</h2></div><div class="legend"><span>User material</span><span class="generated">Technique</span></div></div><div id="score" class="score"></div></section>
+    </div><aside>
+      <section class="panel section"><span class="eyebrow">03 · Connections</span><h2>Transition seams</h2><p class="lede">Options adapt to the departing chord’s available beat budget.</p><div id="seam-list" class="seam-list"></div></section>
+      <section class="panel section coach"><span class="eyebrow">04 · AI tutor</span><h2>Hear the why</h2><div id="coach-output"><p class="empty">Select a seam and ask why it works.</p></div></section>
+    </aside></section>
+  </main>
+  <dialog id="piano-dialog"><div class="dialog-head"><div><span class="eyebrow">Explicit voicing</span><h2>Shape a chord</h2></div><button id="modal-cancel" class="ghost" aria-label="Close">×</button></div><div class="modal-controls"><label>Root<select id="modal-root"></select></label><label>Quality<select id="modal-quality"></select></label><label>Bars<input id="modal-bars" type="number" min="0.5" step="0.5" value="1"></label></div><p class="modal-help">Choose a quality for a starting voicing, then toggle individual keys. The exact MIDI notes below are what LEGATO stores and plays.</p><div id="piano-keys" class="piano"></div><div id="selected-notes" class="selected-notes"></div><div class="dialog-actions"><button id="modal-save" class="primary">Save exact voicing</button></div></dialog>
+  <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body></html>

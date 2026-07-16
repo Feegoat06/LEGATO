@@ -1,4 +1,5 @@
-// state.js for Legato.
+// state.js for LEGATO.
+import { compileProgression } from './engine/compile.js';
 //
 // THE CONTRACT. Three branches build against this shape; lock it before anyone diverges.
 // Prose, reasoning, and worked examples live in docs/DATA-MODEL.md — this file is the
@@ -134,12 +135,16 @@ export function newId(prefix = 'c') {
 
 /** @returns {Settings} */
 export function makeSettings(overrides = {}) {
+    const timeSig = overrides.timeSig
+        ? { ...overrides.timeSig }
+        : { num: 4, den: 4 };
     return {
         tempo: 100,
-        timeSig: { num: 4, den: 4 },
+        timeSig,
         key: 0,
         clef: 'auto',
         ...overrides,
+        timeSig,
     };
 }
 
@@ -215,8 +220,9 @@ export function validateProgression(raw) {
 
         const s = raw.settings ?? {};
         const settings = makeSettings({
-            tempo: Number.isFinite(s.tempo) ? s.tempo : 100,
-            timeSig: (s.timeSig && Number.isFinite(s.timeSig.num) && Number.isFinite(s.timeSig.den))
+            tempo: Number.isFinite(s.tempo) && s.tempo >= 30 && s.tempo <= 240 ? s.tempo : 100,
+            timeSig: (s.timeSig && Number.isInteger(s.timeSig.num) && s.timeSig.num > 0
+                && Number.isInteger(s.timeSig.den) && [2, 4, 8, 16].includes(s.timeSig.den))
                 ? { num: s.timeSig.num, den: s.timeSig.den } : { num: 4, den: 4 },
             key: Number.isInteger(s.key) && s.key >= -7 && s.key <= 7 ? s.key : 0,
             clef: ['auto', 'treble', 'bass'].includes(s.clef) ? s.clef : 'auto',
@@ -224,13 +230,17 @@ export function validateProgression(raw) {
 
         if (!Array.isArray(raw.chords)) return { ok: false, warnings, error: 'chords is not an array.' };
         const chords = raw.chords.map((c, i) => {
-            if (!c || !Array.isArray(c.notes) || !c.notes.every(Number.isInteger)) {
+            if (!c || !Array.isArray(c.notes) || c.notes.length === 0
+                || !c.notes.every((note) => Number.isInteger(note) && note >= 21 && note <= 108)) {
                 throw new Error(`Chord ${ i } has invalid notes.`);
+            }
+            if (!Number.isFinite(c.bars) || c.bars < 0.5 || (c.bars * 2) % 1 !== 0) {
+                throw new Error(`Chord ${ i } has invalid bar duration.`);
             }
             return {
                 id: typeof c.id === 'string' ? c.id : newId('c'),
                 notes: [...c.notes],
-                bars: Number.isFinite(c.bars) && c.bars >= 0.5 ? c.bars : 1,
+                bars: c.bars,
                 ...(c.hint && Number.isInteger(c.hint.rootMidi) ? { hint: c.hint } : {}),
             };
         });
@@ -270,7 +280,5 @@ export function validateProgression(raw) {
  * @returns {Segment[]}
  */
 export function compile(progression) {
-    // TODO(Eric): implemented in engine/*. Stub returns [] so branches can wire against it today.
-    void progression;
-    return [];
+    return compileProgression(progression);
 }

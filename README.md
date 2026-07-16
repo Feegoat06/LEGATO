@@ -1,58 +1,37 @@
-# Legato
+# LEGATO
 
-Legato is an AI music tutor that helps learners build chord progressions, hear
-how transitions work, and understand the theory behind them.
+LEGATO is an interactive AI music tutor for pianists. Build exact chord voicings, connect them with a harmonic technique, see and hear the compiled result, then ask why the transition works.
 
-## What it does
+## Run locally
 
-- Build chords with root, quality, inversion, octave, and duration controls.
-- Render the progression as staff notation and play it with a piano sound.
-- Choose a transition technique between any two chords.
-- Ask the AI coach to explain what a selected transition does and why.
-- Reorder chords, adjust tempo/time signature/clef, and save or move projects
-  using local storage plus JSON import/export.
-
-## Local development
-
-This is a no-build-step ES module app. Do not open `index.html` directly,
-because browser module imports are blocked under `file://` URLs.
+Requires Node.js 20+.
 
 ```bash
-python3 -m http.server 8000
+npm start
 ```
 
-Then visit `http://localhost:8000`.
+Open `http://localhost:8000`. The app loads VexFlow, Tone.js, and Salamander piano samples from CDNs, so notation/audio need an internet connection on first load.
+
+For AI coaching, set the server-only environment variable before starting:
+
+```bash
+export OPENAI_API_KEY="your-key"
+export OPENAI_MODEL="gpt-5.6" # optional default
+npm start
+```
+
+Never put the key in client code. `server.mjs` serves the local API route; `api/coach.js` is also compatible with a Vercel serverless deployment.
 
 ## Architecture
 
-The progression model is the source of truth. UI changes update that model,
-then `compile()` creates one ordered segment list for notation, playback, and
-the active-bar animation. This keeps what the learner sees and hears aligned.
+The UI mutates one `progression`. Pure `compile()` turns it into atomic segments with exact pitches and timing. VexFlow notation, Tone.js playback, highlighting, and coach grounding all consume that same segment list. User MIDI voicings are never altered; generated technique material alone uses closest-voicing search.
 
-```text
-progression → compile() → segment list → notation
-                                      → audio
-                                      → bar playback effect
+Key areas: `js/state.js` (runtime contract), `js/engine/` (techniques, voice leading, rhythm), `js/notation/`, `js/audio/`, `js/ui/`, and `api/coach.js`.
+
+## Test
+
+```bash
+npm test
 ```
 
-## Stack
-
-- Vanilla HTML, CSS, and JavaScript ES modules
-- VexFlow for notation
-- Tone.js with piano samples for audio
-- SortableJS for chord reordering
-- OpenAI via a Vercel serverless coach endpoint
-- localStorage plus versioned JSON import/export for projects
-
-## Demo material
-
-The curated examples live in `js/data/demo-progressions.js`. Coaching prompt
-content lives in `js/coach/prompts.js`; the server endpoint supplies the actual
-model request and keeps API credentials out of the client.
-
-## Team
-
-- Eric — music engine, state model, audio
-- Fee — UI, notation, effects, deployment, coach endpoint
-- Louie — music examples, coaching content, documentation, demo narration
->>>>>>> louie
+Tests cover seam preservation, validation, all eight registry techniques, user-voicing integrity, generated-register choice, run beat caps, measure-relative timing, and tempo independence.

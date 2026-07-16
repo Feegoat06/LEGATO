@@ -35,7 +35,7 @@ export function buildSeamCoachPrompt({ fromChord, toChord, technique, generatedN
   const isDirectTransition = !technique || technique === 'none';
 
   return `
-You are Legato, a warm and concise AI music tutor helping a learner understand
+You are LEGATO, a warm and concise AI music tutor helping an intermediate-to-advanced pianist understand
 one harmonic transition in a piano progression.
 
 ${THEORY_GUARDRAILS}
@@ -61,7 +61,7 @@ generic praise and avoid jargon unless you briefly make it understandable.
 }
 
 export const MOOD_TO_PROGRESSION_SYSTEM_PROMPT = `
-You suggest short, playable four-chord piano progressions for a beginner.
+You suggest short, playable four-chord piano progressions for an intermediate pianist.
 Return valid JSON only, with keys: title, moodExplanation, and chords.
 chords must be an array of four objects with rootMidi (integer), quality (string),
 bars (integer 1 or 2), and inversion (integer 0, 1, or 2). Use only qualities
