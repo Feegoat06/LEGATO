@@ -42,3 +42,21 @@ export function stopPlayback() {
   stopTimers = [];
   sampler?.releaseAll();
 }
+
+async function ready() {
+  await Tone.start();
+  const instrument = getSampler();
+  await Tone.loaded();
+  return instrument;
+}
+
+export async function playNote(midi, seconds = 0.45) {
+  const instrument = await ready();
+  instrument.triggerAttackRelease(frequency(midi), seconds);
+}
+
+export async function playChord(midis, seconds = 1.2) {
+  if (!midis?.length) return;
+  const instrument = await ready();
+  instrument.triggerAttackRelease(midis.map(frequency), seconds);
+}

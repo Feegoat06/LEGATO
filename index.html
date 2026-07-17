@@ -39,7 +39,7 @@
 
         <section class="editor-section" aria-labelledby="chords-title">
           <div class="section-title"><span>02</span><h2 id="chords-title">Chord material</h2><button id="add-chord" class="text-action">+ Add chord</button></div>
-          <div class="table-head"><span>Voicing</span><span>Bars</span><span></span></div>
+          <div class="table-head"><span>Voicing</span><span>Beats</span><span></span></div>
           <div id="chord-list" class="chord-list"></div>
         </section>
 
@@ -87,8 +87,11 @@
           <div class="selection-readout"><div><span>Pitch names</span><strong id="selected-notes">No notes selected</strong></div></div>
         </div>
         <aside class="preview-panel" aria-label="Chord preview">
-          <div class="preview-header"><span>Preview</span><span id="octave-readout">Octave 4</span></div>
-          <div class="preview-sheet" id="preview-sheet"></div>
+          <div class="preview-header">
+            <div class="preview-title"><span>Preview</span><button type="button" id="preview-play" class="preview-play" aria-label="Play chord preview">▶</button></div>
+            <span id="octave-readout">Octave 4</span>
+          </div>
+          <div class="preview-sheet" id="preview-sheet" role="button" tabindex="0" aria-label="Play chord preview"></div>
           <div class="octave-controls">
             <button type="button" id="octave-down" aria-label="Shift down one octave">▼ Octave</button>
             <button type="button" id="octave-up" aria-label="Shift up one octave">▲ Octave</button>

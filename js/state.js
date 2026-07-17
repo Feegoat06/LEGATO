@@ -123,6 +123,24 @@ export function availableBeats(departingTotalBeats) {
     return Math.max(0, Math.min(departingTotalBeats - 1, 4));
 }
 
+/** True for compound meters (6/8, 9/8, 12/8). */
+export function isCompoundMeter(timeSig) {
+    return timeSig.den === 8 && timeSig.num % 3 === 0 && timeSig.num >= 6;
+}
+
+/** Length of one user-facing beat, in quarter-beats. Dotted quarter for compound, else 4/den. */
+export function beatValue(timeSig) {
+    return isCompoundMeter(timeSig) ? 1.5 : 4 / timeSig.den;
+}
+
+/** How many user-facing beats fit in one bar of this meter. */
+export function beatsPerBar(timeSig) {
+    return measureLength(timeSig) / beatValue(timeSig);
+}
+
+export function beatsToBars(beats, timeSig) { return beats / beatsPerBar(timeSig); }
+export function barsToBeats(bars, timeSig) { return bars * beatsPerBar(timeSig); }
+
 let _idCounter = 0;
 /** Simple stable id. Swap for crypto.randomUUID() if you prefer. */
 export function newId(prefix = 'c') {
@@ -234,7 +252,7 @@ export function validateProgression(raw) {
                 || !c.notes.every((note) => Number.isInteger(note) && note >= 21 && note <= 108)) {
                 throw new Error(`Chord ${ i } has invalid notes.`);
             }
-            if (!Number.isFinite(c.bars) || c.bars < 0.5 || (c.bars * 2) % 1 !== 0) {
+            if (!Number.isFinite(c.bars) || c.bars <= 0 || c.bars > 32) {
                 throw new Error(`Chord ${ i } has invalid bar duration.`);
             }
             return {

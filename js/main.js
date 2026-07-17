@@ -1,4 +1,4 @@
-import { availableBeats, chordTotalBeats, compile, makeChord, reconcileSeams } from './state.js';
+import { availableBeats, chordTotalBeats, compile, makeChord, reconcileSeams, barsToBeats, beatsToBars } from './state.js';
 import { makeDefaultProgression } from './data/demo-progressions.js';
 import { chordDisplayName, noteName } from './engine/chords.js';
 import { TECHNIQUES } from './engine/techniques.js';
@@ -47,13 +47,18 @@ function renderChords() {
     elements.chords.innerHTML = '<div class="empty-state">No material yet. Add a chord and choose its exact piano voicing.</div>';
     return;
   }
+  const timeSig = progression.settings.timeSig;
+  const beatChoices = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
+  const beatLabel = (beats) => beats === 0.5 ? '½' : beats === 1.5 ? '1½' : String(beats);
   progression.chords.forEach((chord, index) => {
     const row = document.createElement('article');
     row.className = 'chord-row';
     const notes = chord.notes.map((note) => noteName(note, progression.settings.key)).join(' · ');
-    row.innerHTML = `<button class="chord-main" aria-label="Edit chord ${index + 1}"><strong>${String(index + 1).padStart(2, '0')} · ${chordDisplayName(chord, progression.settings.key)}</strong><small>${notes}</small></button><select class="chord-bars" aria-label="Bars for chord ${index + 1}">${[0.5,1,1.5,2,3,4].map((bars) => `<option value="${bars}" ${bars === chord.bars ? 'selected' : ''}>${bars}</option>`).join('')}</select><button class="delete-button" aria-label="Delete chord ${index + 1}">×</button>`;
-    row.querySelector('.chord-main').onclick = () => { editingId = chord.id; openPianoModal($('#piano-dialog'), chord, saveChord); };
-    row.querySelector('.chord-bars').onchange = (event) => { chord.bars = Number(event.target.value); rerender(); };
+    const currentBeats = Number(barsToBeats(chord.bars, timeSig).toFixed(4));
+    const options = beatChoices.includes(currentBeats) ? beatChoices : [...beatChoices, currentBeats].sort((a, b) => a - b);
+    row.innerHTML = `<button class="chord-main" aria-label="Edit chord ${index + 1}"><strong>${String(index + 1).padStart(2, '0')} · ${chordDisplayName(chord, progression.settings.key)}</strong><small>${notes}</small></button><select class="chord-bars" aria-label="Beats for chord ${index + 1}">${options.map((beats) => `<option value="${beats}" ${beats === currentBeats ? 'selected' : ''}>${beatLabel(beats)}</option>`).join('')}</select><button class="delete-button" aria-label="Delete chord ${index + 1}">×</button>`;
+    row.querySelector('.chord-main').onclick = () => { editingId = chord.id; openPianoModal($('#piano-dialog'), chord, saveChord, timeSig); };
+    row.querySelector('.chord-bars').onchange = (event) => { chord.bars = beatsToBars(Number(event.target.value), timeSig); rerender(); };
     row.querySelector('.delete-button').onclick = () => replaceChords(progression.chords.filter((item) => item.id !== chord.id));
     elements.chords.append(row);
   });
@@ -162,7 +167,7 @@ function rerender() {
 }
 
 populateChordControls($('#piano-dialog'));
-$('#add-chord').onclick = () => { editingId = null; openPianoModal($('#piano-dialog'), null, saveChord); };
+$('#add-chord').onclick = () => { editingId = null; openPianoModal($('#piano-dialog'), null, saveChord, progression.settings.timeSig); };
 $('#reset-example').onclick = () => { stopPlayback(); progression = makeDefaultProgression(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
 $('#play').onclick = async () => {
   $('#play').disabled = true; $('#playback-pulse').classList.add('active'); $('#playback-status').value = 'Loading piano…';

@@ -1,4 +1,7 @@
 import { QUALITIES, noteName, notesFrom } from '../engine/chords.js';
+import { detectChord } from '../engine/detect.js';
+import { playNote, playChord } from '../audio/playback.js';
+import { beatsPerBar, beatsToBars, barsToBeats } from '../state.js';
 
 const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
 const PITCH_CLASS_LABELS = ['C', 'C♯/D♭', 'D', 'D♯/E♭', 'E', 'F', 'F♯/G♭', 'G', 'G♯/A♭', 'A', 'A♯/B♭', 'B'];
@@ -8,6 +11,16 @@ const QUALITY_LABELS = {
   Major: 'Major', Minor: 'Minor', Dom7: 'Dom 7', Maj7: 'Maj 7', Min7: 'Min 7',
   Dim: 'Dim', Dim7: 'Dim 7', m7b5: 'm7b5', Sus2: 'Sus2', Sus4: 'Sus4', Aug: 'Aug',
 };
+const BEAT_OPTIONS = [
+  { beats: 0.5, label: '½ beat' },
+  { beats: 1, label: '1 beat' },
+  { beats: 1.5, label: '1½ beats' },
+  { beats: 2, label: '2 beats' },
+  { beats: 3, label: '3 beats' },
+  { beats: 4, label: '4 beats' },
+  { beats: 6, label: '6 beats' },
+  { beats: 8, label: '8 beats' },
+];
 
 function pitchClassOf(midi) { return ((midi % 12) + 12) % 12; }
 
@@ -15,19 +28,6 @@ function matchesQuality(notes, rootMidi, quality) {
   const selectedPcs = [...new Set(notes.map(pitchClassOf))].sort((a, b) => a - b);
   const qualityPcs = [...new Set(QUALITIES[quality].map((interval) => pitchClassOf(rootMidi + interval)))].sort((a, b) => a - b);
   return selectedPcs.length === qualityPcs.length && selectedPcs.every((pc, index) => pc === qualityPcs[index]);
-}
-
-function detectRootAndQuality(notes) {
-  const pcs = [...new Set(notes.map(pitchClassOf))];
-  for (const rootPc of pcs) {
-    for (const quality of Object.keys(QUALITIES)) {
-      const expected = new Set(QUALITIES[quality].map((i) => pitchClassOf(rootPc + i)));
-      if (expected.size === pcs.length && pcs.every((pc) => expected.has(pc))) {
-        return { rootPc, quality };
-      }
-    }
-  }
-  return null;
 }
 
 function renderPreview(container, notes) {
@@ -65,45 +65,54 @@ function renderPreview(container, notes) {
   voice.draw(ctx, stave);
 }
 
-export function openPianoModal(dialog, existingChord, onSave) {
+function fillBeatOptions(select, timeSig, currentBars) {
+  select.replaceChildren();
+  const currentBeats = currentBars != null ? Number(barsToBeats(currentBars, timeSig).toFixed(4)) : null;
+  const options = [...BEAT_OPTIONS];
+  const known = options.some((opt) => opt.beats === currentBeats);
+  if (currentBeats != null && !known) {
+    options.push({ beats: currentBeats, label: `${currentBeats} beats` });
+    options.sort((a, b) => a.beats - b.beats);
+  }
+  options.forEach((opt) => {
+    const option = new Option(opt.label, String(opt.beats));
+    if (currentBeats != null && opt.beats === currentBeats) option.selected = true;
+    select.add(option);
+  });
+}
+
+export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4, den: 4 }) {
   const rootSelect = dialog.querySelector('#modal-root');
-  const barsSelect = dialog.querySelector('#modal-bars');
+  const durationSelect = dialog.querySelector('#modal-bars');
   const keys = dialog.querySelector('#piano-keys');
   const chips = dialog.querySelector('#modal-quality-chips');
   const previewSheet = dialog.querySelector('#preview-sheet');
+  const previewPlay = dialog.querySelector('#preview-play');
   const octaveReadout = dialog.querySelector('#octave-readout');
   const octaveUp = dialog.querySelector('#octave-up');
   const octaveDown = dialog.querySelector('#octave-down');
 
-  let selected = new Set(existingChord?.notes ?? notesFrom(60, 'Major'));
-  let rootPc;
-  let quality;
-  let octave;
+  fillBeatOptions(durationSelect, timeSig, existingChord?.bars ?? 1);
 
-  if (existingChord?.hint) {
-    rootPc = pitchClassOf(existingChord.hint.rootMidi);
-    quality = existingChord.hint.quality;
-    octave = Math.floor(existingChord.hint.rootMidi / 12) - 1;
-  } else if (existingChord?.notes?.length) {
-    const detected = detectRootAndQuality(existingChord.notes);
-    rootPc = detected?.rootPc ?? pitchClassOf(existingChord.notes[0]);
-    quality = detected?.quality ?? 'Major';
-    octave = Math.floor(Math.min(...existingChord.notes) / 12) - 1;
-  } else {
-    rootPc = 0;
-    quality = 'Major';
-    octave = 4;
-  }
+  let selected = new Set(existingChord?.notes ?? notesFrom(60, 'Major'));
+  const initialDetection = existingChord ? detectChord([...selected]) : { rootPc: 0, quality: 'Major' };
+  let rootPc = initialDetection?.rootPc ?? pitchClassOf(existingChord?.hint?.rootMidi ?? 60);
+  let quality = initialDetection?.quality ?? existingChord?.hint?.quality ?? 'Major';
+  let octave = existingChord?.hint?.rootMidi
+    ? Math.floor(existingChord.hint.rootMidi / 12) - 1
+    : existingChord?.notes?.length
+      ? Math.floor(Math.min(...existingChord.notes) / 12) - 1
+      : 4;
 
   rootSelect.value = String(rootPc);
-  barsSelect.value = String(existingChord?.bars ?? 1);
 
   function currentRootMidi() { return rootPc + (octave + 1) * 12; }
 
   function renderChips() {
     [...chips.children].forEach((chip) => {
-      chip.classList.toggle('is-active', chip.dataset.quality === quality);
-      chip.setAttribute('aria-pressed', String(chip.dataset.quality === quality));
+      const active = chip.dataset.quality === quality;
+      chip.classList.toggle('is-active', active);
+      chip.setAttribute('aria-pressed', String(active));
     });
   }
 
@@ -116,9 +125,34 @@ export function openPianoModal(dialog, existingChord, onSave) {
     octaveReadout.textContent = `Octave ${octave}`;
   }
 
+  function refreshFromSelection() {
+    const sorted = [...selected].sort((a, b) => a - b);
+    const detected = detectChord(sorted);
+    if (detected) {
+      rootPc = detected.rootPc;
+      quality = detected.quality;
+      rootSelect.value = String(rootPc);
+    }
+    renderChips();
+    updateStatus(sorted, !!detected);
+  }
+
+  function updateStatus(sorted, recognized) {
+    const letters = [...new Set(sorted.map((midi) => LETTER_ORDER[pitchClassOf(midi)]))];
+    dialog.querySelector('#selected-notes').textContent = letters.length ? letters.join(' · ') : 'No notes selected';
+    dialog.querySelector('#voicing-status').textContent = recognized
+      ? `${LETTER_ORDER[rootPc]} ${QUALITY_LABELS[quality]} pitch classes recognized. Octaves and doublings remain yours.`
+      : sorted.length
+        ? 'Custom pitch-class set: no matching chord label, but every selected note is preserved.'
+        : 'Toggle any key or click a quality to begin.';
+    dialog.querySelector('#modal-save').disabled = sorted.length === 0;
+    previewPlay.disabled = sorted.length === 0;
+  }
+
   function renderKeys() {
     const rootMidi = currentRootMidi();
     const qualityPcs = new Set(QUALITIES[quality].map((interval) => pitchClassOf(rootMidi + interval)));
+    const savedScroll = keys.scrollLeft;
     keys.replaceChildren();
     for (let midi = 21; midi <= 108; midi += 1) {
       const button = document.createElement('button');
@@ -130,21 +164,20 @@ export function openPianoModal(dialog, existingChord, onSave) {
       button.setAttribute('aria-label', noteName(midi));
       button.setAttribute('aria-pressed', String(selectedNow));
       button.onclick = () => {
-        selected.has(midi) ? selected.delete(midi) : selected.add(midi);
+        if (selected.has(midi)) selected.delete(midi);
+        else selected.add(midi);
+        playNote(midi).catch(() => {});
+        refreshFromSelection();
+        updateOctaveControls();
         renderKeys();
+        renderPreview(previewSheet, [...selected].sort((a, b) => a - b));
       };
       keys.append(button);
     }
-    const sorted = [...selected].sort((a, b) => a - b);
-    const letters = [...new Set(sorted.map((midi) => LETTER_ORDER[pitchClassOf(midi)]))];
-    dialog.querySelector('#selected-notes').textContent = letters.length ? letters.join(' · ') : 'No notes selected';
-    const keepsHint = sorted.length > 0 && matchesQuality(sorted, rootMidi, quality);
-    dialog.querySelector('#voicing-status').textContent = keepsHint
-      ? `${LETTER_ORDER[rootPc]} ${QUALITY_LABELS[quality]} pitch classes confirmed. Octaves and doublings remain yours.`
-      : 'Custom pitch-class set: the quality label will be dropped, but every selected note is preserved.';
-    dialog.querySelector('#modal-save').disabled = sorted.length === 0;
+    keys.scrollLeft = savedScroll;
+    refreshFromSelection();
     updateOctaveControls();
-    renderPreview(previewSheet, sorted);
+    renderPreview(previewSheet, [...selected].sort((a, b) => a - b));
   }
 
   function applyRootQuality() {
@@ -171,6 +204,10 @@ export function openPianoModal(dialog, existingChord, onSave) {
     selectedButton?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
+  function playPreview() {
+    playChord([...selected].sort((a, b) => a - b)).catch(() => {});
+  }
+
   rootSelect.onchange = () => { rootPc = Number(rootSelect.value); applyRootQuality(); };
   chips.onclick = (event) => {
     const chip = event.target.closest('[data-quality]');
@@ -180,13 +217,19 @@ export function openPianoModal(dialog, existingChord, onSave) {
   };
   octaveUp.onclick = () => shiftOctave(1);
   octaveDown.onclick = () => shiftOctave(-1);
+  previewSheet.onclick = playPreview;
+  previewSheet.onkeydown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); playPreview(); }
+  };
+  previewPlay.onclick = (event) => { event.stopPropagation(); playPreview(); };
   dialog.querySelector('#modal-cancel').onclick = () => dialog.close();
   dialog.querySelector('#modal-save').onclick = () => {
     const notes = [...selected].sort((a, b) => a - b);
     if (!notes.length) return;
     const rootMidi = currentRootMidi();
     const hint = matchesQuality(notes, rootMidi, quality) ? { rootMidi, quality } : undefined;
-    onSave({ notes, bars: Number(barsSelect.value), ...(hint ? { hint } : {}) });
+    const beats = Number(durationSelect.value);
+    onSave({ notes, bars: beatsToBars(beats, timeSig), ...(hint ? { hint } : {}) });
     dialog.close();
   };
 
