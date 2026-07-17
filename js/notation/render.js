@@ -32,18 +32,18 @@ function styleModifiers(stave, color) {
  * @param {HTMLElement} container
  * @param {Segment[]}   segments   Output of compile().
  * @param {Settings}    settings   For key signature, time signature, and clef.
- * @returns {{measureCount: number}}  Used by main.js for the "N measures" summary.
+ * @returns {{measureCount: number, layout: object[]}} Summary plus staff geometry for the Canvas overlay.
  */
 export function renderNotation(container, segments, settings) {
   const VF = window.Vex?.Flow ?? window.VexFlow;
   container.replaceChildren();
   if (!VF) {
     container.innerHTML = '<div class="notice">Notation is still loading. Refresh if this message remains.</div>';
-    return { measureCount: 0 };
+    return { measureCount: 0, layout: [] };
   }
   if (!segments.length) {
     container.innerHTML = '<div class="notice">Add a chord to begin the score.</div>';
-    return { measureCount: 0 };
+    return { measureCount: 0, layout: [] };
   }
 
   const measureCount = Math.max(...segments.map((segment) => segment.measureIndex)) + 1;
@@ -57,23 +57,26 @@ export function renderNotation(container, segments, settings) {
   const context = renderer.getContext();
   const clef = resolvedClef(segments, settings.clef);
   const staffColor = '#7a664b';
+  const lineColor = '#4b3d2d';
   const userColor = '#e6ceaa';
   const techniqueColor = '#d1a15a';
   const notesBySource = [];
+  const layout = [];
 
   for (let measure = 0; measure < measureCount; measure += 1) {
     const column = measure % columns;
     const row = Math.floor(measure / columns);
     const x = 10 + column * staveWidth;
     const y = 16 + row * rowHeight;
+    layout.push({ index: measure, x, width: staveWidth, staffTop: y + 40, lineGap: 10 });
     context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
     const stave = new VF.Stave(x, y, staveWidth);
     if (column === 0) {
       stave.addClef(clef).addTimeSignature(`${ settings.timeSig.num }/${ settings.timeSig.den }`).addKeySignature(KEY_SIGNATURES[settings.key + 7]);
     }
     styleModifiers(stave, staffColor);
-    context.setStrokeStyle(staffColor); context.setFillStyle(staffColor);
-    stave.setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+    context.setStrokeStyle(lineColor); context.setFillStyle(lineColor);
+    stave.setStyle({ fillStyle: lineColor, strokeStyle: lineColor }).setContext(context).draw();
     const measureSegments = segments.filter((segment) => segment.measureIndex === measure);
     const staveNotes = measureSegments.map((segment) => {
       const staveNote = new VF.StaveNote({
@@ -109,5 +112,5 @@ export function renderNotation(container, segments, settings) {
     new VF.StaveTie({ first_note: current.note, last_note: next.note, first_indices: indices, last_indices: indices })
       .setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
   }
-  return { measureCount };
+  return { measureCount, layout };
 }

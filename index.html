@@ -99,13 +99,22 @@
       </header>
 
       <section class="notation-stage" aria-label="Progression notation">
+        <div class="score-stage-meta" aria-hidden="true">
+          <span>Particle score</span>
+          <span id="score-fx-state">Score breathing</span>
+        </div>
         <div class="staff-glow" aria-hidden="true"></div>
-        <div id="score" class="score"></div>
+        <div id="score-layer" class="score-layer">
+          <div id="score" class="score"></div>
+          <canvas id="score-particles" class="score-particles" aria-hidden="true"></canvas>
+        </div>
+        <div class="score-progress-rail" aria-hidden="true"><span></span></div>
       </section>
 
       <section class="transport" aria-label="Playback controls">
-        <div class="transport-buttons"><button id="play" class="play-button"><span>▶</span> Play
-            progression</button><button id="stop" class="stop-button">■ Stop</button></div>
+        <div class="transport-buttons"><button id="play" class="play-button"><span class="play-icon">▶</span><span
+              class="play-copy"><strong>Play progression</strong><small>Assemble in time</small></span></button><button
+            id="stop" class="stop-button">■ Stop</button></div>
         <div class="transport-status"><span id="playback-pulse"></span><output id="playback-status">Ready to
             listen</output></div>
         <button id="reset-example" class="reset-button">↺ Reload example</button>
@@ -191,6 +200,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script type="module" src="/js/main.js"></script>
 </body>
 

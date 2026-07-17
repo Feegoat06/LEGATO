@@ -19,6 +19,7 @@ import { applyKeySignature } from './engine/key-signature.js';
 import { TECHNIQUES } from './engine/techniques.js';
 import { evaluateAllTechniques } from './engine/technique-eligibility.js';
 import { renderNotation } from './notation/render.js';
+import { createScoreParticles } from './notation/particles.js';
 import { playSegments, stopPlayback } from './audio/playback.js';
 import { openPianoModal, populateChordControls } from './ui/piano-modal.js';
 import { buildCoachEvidence } from './coach/evidence.js';
@@ -29,11 +30,13 @@ let segments = [];
 let editingId = null;
 let selectedSeam = 0;
 let scoreZoom = 1;
+let activeMeasure = null;
 const keySourceNotes = new Map();
 const keySourceHints = new Map();
 
 const $ = (selector) => document.querySelector(selector);
 const elements = { chords: $('#chord-list'), seams: $('#seam-list'), score: $('#score'), coach: $('#coach-output') };
+const scoreParticles = createScoreParticles($('#score-particles'));
 
 function syncControls() {
   $('#tempo').value = String(progression.settings.tempo);
@@ -221,7 +224,15 @@ async function explainSeam(index) {
 }
 
 function setActiveMeasure(index) {
+  activeMeasure = index;
   document.querySelectorAll('.measure-group').forEach((measure) => measure.classList.toggle('is-playing', Number(measure.dataset.measure) === index));
+}
+
+function renderScore() {
+  const result = renderNotation(elements.score, segments, progression.settings);
+  scoreParticles.setScore(elements.score.querySelector('svg'), result.layout);
+  setActiveMeasure(activeMeasure);
+  return result;
 }
 
 /**
@@ -232,30 +243,37 @@ function setActiveMeasure(index) {
 function rerender() {
   segments = compile(progression);
   renderChords(); renderSeams();
-  const { measureCount } = renderNotation(elements.score, segments, progression.settings);
+  const { measureCount } = renderScore();
   $('#score-summary').textContent = `${ measureCount } measure${ measureCount === 1 ? '' : 's' } · ${ segments.length } event${ segments.length === 1 ? '' : 's' }`;
   syncControls(); updateCoachContext();
 }
 
 populateChordControls($('#piano-dialog'));
 $('#add-chord').onclick = () => { editingId = null; openPianoModal($('#piano-dialog'), null, saveChord, progression.settings.timeSig, progression.settings.key); };
-$('#reset-example').onclick = () => { stopPlayback(); progression = makeDefaultProgression(); keySourceNotes.clear(); keySourceHints.clear(); applyKeyToMaterial(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
+$('#reset-example').onclick = () => { stopPlayback(); scoreParticles.settle(); progression = makeDefaultProgression(); keySourceNotes.clear(); keySourceHints.clear(); applyKeyToMaterial(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
 $('#play').onclick = async () => {
   $('#play').disabled = true; $('#playback-pulse').classList.add('active'); $('#playback-status').value = 'Loading piano…';
+  scoreParticles.beginPlayback();
   try {
-    await playSegments(segments, progression.settings, (measure) => { setActiveMeasure(measure); if (measure !== null) $('#playback-status').value = `Playing measure ${ measure + 1 }`; }, () => { $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Playback complete'; });
+    await playSegments(
+      segments,
+      progression.settings,
+      (measure) => { setActiveMeasure(measure); if (measure !== null) $('#playback-status').value = `Playing measure ${ measure + 1 }`; },
+      () => { scoreParticles.settle(); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Playback complete'; },
+      (progress, measure) => scoreParticles.setProgress(progress, measure),
+    );
   } catch (error) {
-    $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = error.message;
+    scoreParticles.settle(); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = error.message;
   }
 };
-$('#stop').onclick = () => { stopPlayback(); setActiveMeasure(null); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Stopped'; };
+$('#stop').onclick = () => { stopPlayback(); scoreParticles.settle(); setActiveMeasure(null); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Stopped'; };
 $('#tempo').oninput = (event) => { progression.settings.tempo = Number(event.target.value); $('#tempo-value').value = event.target.value; };
 $('#time-signature').onchange = (event) => { const [num, den] = event.target.value.split('/').map(Number); progression.settings.timeSig = { num, den }; clearCoach(); rerender(); };
 $('#key-signature').onchange = (event) => { progression.settings.key = Number(event.target.value); applyKeyToMaterial(); clearCoach(); rerender(); };
 $('#clef').onchange = (event) => { progression.settings.clef = event.target.value; rerender(); };
 function setScoreZoom(nextZoom) {
   scoreZoom = Math.max(0.7, Math.min(1.5, Math.round(nextZoom * 10) / 10));
-  elements.score.style.zoom = String(scoreZoom);
+  $('#score-layer').style.zoom = String(scoreZoom);
   $('#score-zoom-value').textContent = `${ Math.round(scoreZoom * 100) }% · scroll score to zoom`;
 }
 $('.notation-stage').addEventListener('wheel', (event) => {
@@ -263,7 +281,11 @@ $('.notation-stage').addEventListener('wheel', (event) => {
   event.preventDefault();
   setScoreZoom(scoreZoom + (event.deltaY < 0 ? 0.1 : -0.1));
 }, { passive: false });
-window.addEventListener('resize', () => renderNotation(elements.score, segments, progression.settings));
+let resizeFrame = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(renderScore);
+});
 applyKeyToMaterial();
 rerender();
 setScoreZoom(scoreZoom);

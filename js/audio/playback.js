@@ -15,6 +15,8 @@
  */
 let sampler;
 let stopTimers = [];
+let progressFrame = 0;
+let playbackGeneration = 0;
 
 function getSampler() {
   if (!window.Tone) throw new Error('Tone.js is not available.');
@@ -62,18 +64,23 @@ export function coalesceTiedSegments(segments, measureLength) {
  * @param {Settings}  settings      Progression settings (tempo, timeSig).
  * @param {(measureIndex: number | null) => void} onMeasure  Fires when the active measure changes; called with `null` when playback ends.
  * @param {() => void} [onStop]     Fires once after the final segment stops sounding.
+ * @param {(progress: number, measureIndex: number | null) => void} [onProgress]
+ *        Frame-level progress locked to the same scheduled audio timeline.
  *
  * Cancels any in-flight schedule before starting the new one so overlapping
  * `Play` clicks don't stack.
  */
-export async function playSegments(segments, settings, onMeasure, onStop) {
+export async function playSegments(segments, settings, onMeasure, onStop, onProgress) {
   stopPlayback();
+  const generation = playbackGeneration;
   await Tone.start();
   const instrument = getSampler();
   await Tone.loaded();
+  if (generation !== playbackGeneration) return;
   const secondsPerBeat = 60 / settings.tempo;
   const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
-  const now = Tone.now() + 0.08;
+  const leadIn = 0.08;
+  const now = Tone.now() + leadIn;
   let end = 0;
   let lastMeasure = -1;
   for (const event of coalesceTiedSegments(segments, measureLength)) {
@@ -81,16 +88,37 @@ export async function playSegments(segments, settings, onMeasure, onStop) {
     instrument.triggerAttackRelease(event.notes.map(frequency), event.durationBeats * secondsPerBeat * 0.96, now + at);
     end = Math.max(end, at + event.durationBeats * secondsPerBeat);
     if (event.measureIndex !== lastMeasure) {
-      stopTimers.push(setTimeout(() => onMeasure(event.measureIndex), at * 1000));
+      stopTimers.push(setTimeout(() => onMeasure(event.measureIndex), (leadIn + at) * 1000));
       lastMeasure = event.measureIndex;
     }
   }
-  stopTimers.push(setTimeout(() => { onMeasure(null); onStop?.(); }, (end + 0.1) * 1000));
+  const measureCount = Math.max(1, Math.ceil(end / (measureLength * secondsPerBeat)));
+  const visualStart = performance.now() + leadIn * 1000;
+  const tickProgress = (timestamp) => {
+    if (generation !== playbackGeneration) return;
+    const elapsed = Math.max(0, (timestamp - visualStart) / 1000);
+    const normalized = end ? Math.min(1, elapsed / end) : 1;
+    const measure = normalized < 1 ? Math.min(measureCount - 1, Math.floor(elapsed / (measureLength * secondsPerBeat))) : null;
+    onProgress?.(normalized, measure);
+    if (normalized < 1) progressFrame = requestAnimationFrame(tickProgress);
+  };
+  onProgress?.(0, 0);
+  progressFrame = requestAnimationFrame(tickProgress);
+  stopTimers.push(setTimeout(() => {
+    cancelAnimationFrame(progressFrame);
+    progressFrame = 0;
+    onProgress?.(1, null);
+    onMeasure(null);
+    onStop?.();
+  }, (leadIn + end + 0.1) * 1000));
 }
 
 export function stopPlayback() {
+  playbackGeneration += 1;
   stopTimers.forEach(clearTimeout);
   stopTimers = [];
+  cancelAnimationFrame(progressFrame);
+  progressFrame = 0;
   sampler?.releaseAll();
 }
 
