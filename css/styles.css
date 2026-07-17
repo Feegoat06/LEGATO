@@ -500,6 +500,11 @@ body {
     opacity: .92
 }
 
+.notation-stage.is-particle-paused .staff-glow {
+    opacity: 1;
+    transform: translate(8%, -50%) scale(1.08)
+}
+
 .score .notice {
     color: var(--tan-dim);
     font: italic 1rem var(--font-display);
@@ -1239,6 +1244,10 @@ dialog::backdrop {
     color: rgba(209, 161, 90, .88)
 }
 
+.notation-stage.is-particle-paused #score-fx-state {
+    color: rgba(230, 206, 170, .76)
+}
+
 .score-layer {
     isolation: auto
 }
@@ -1248,7 +1257,7 @@ dialog::backdrop {
 }
 
 .notation-stage.has-full-particles .score svg {
-    opacity: .38
+    opacity: 0
 }
 
 .score-progress-rail {
@@ -1283,6 +1292,19 @@ dialog::backdrop {
     border-radius: 50%;
     background: var(--ivory);
     box-shadow: 0 0 12px var(--anchor);
+    transform: translate(50%, -50%)
+}
+
+.notation-stage.is-particle-paused .score-progress-rail span::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--anchor);
+    box-shadow: 0 0 10px rgba(209, 161, 90, .72);
     transform: translate(50%, -50%)
 }
 

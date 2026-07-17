@@ -241,6 +241,11 @@ function renderScore() {
  * (via `segments`), and DOM all update from the same source in one pass.
  */
 function rerender() {
+  stopPlayback();
+  scoreParticles.settle({ immediate: true });
+  setActiveMeasure(null);
+  $('#play').disabled = false;
+  $('#playback-pulse').classList.remove('active');
   segments = compile(progression);
   renderChords(); renderSeams();
   const { measureCount } = renderScore();
@@ -250,7 +255,7 @@ function rerender() {
 
 populateChordControls($('#piano-dialog'));
 $('#add-chord').onclick = () => { editingId = null; openPianoModal($('#piano-dialog'), null, saveChord, progression.settings.timeSig, progression.settings.key); };
-$('#reset-example').onclick = () => { stopPlayback(); scoreParticles.settle(); progression = makeDefaultProgression(); keySourceNotes.clear(); keySourceHints.clear(); applyKeyToMaterial(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
+$('#reset-example').onclick = () => { progression = makeDefaultProgression(); keySourceNotes.clear(); keySourceHints.clear(); applyKeyToMaterial(); selectedSeam = 0; clearCoach(); $('#playback-status').value = 'Example restored'; rerender(); };
 $('#play').onclick = async () => {
   $('#play').disabled = true; $('#playback-pulse').classList.add('active'); $('#playback-status').value = 'Loading piano…';
   scoreParticles.beginPlayback();
@@ -263,10 +268,10 @@ $('#play').onclick = async () => {
       (progress, measure) => scoreParticles.setProgress(progress, measure),
     );
   } catch (error) {
-    scoreParticles.settle(); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = error.message;
+    scoreParticles.settle({ immediate: true }); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = error.message;
   }
 };
-$('#stop').onclick = () => { stopPlayback(); scoreParticles.settle(); setActiveMeasure(null); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Stopped'; };
+$('#stop').onclick = () => { stopPlayback(); scoreParticles.settle({ preserveProgress: true }); setActiveMeasure(null); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Stopped'; };
 $('#tempo').oninput = (event) => { progression.settings.tempo = Number(event.target.value); $('#tempo-value').value = event.target.value; };
 $('#time-signature').onchange = (event) => { const [num, den] = event.target.value.split('/').map(Number); progression.settings.timeSig = { num, den }; clearCoach(); rerender(); };
 $('#key-signature').onchange = (event) => { progression.settings.key = Number(event.target.value); applyKeyToMaterial(); clearCoach(); rerender(); };

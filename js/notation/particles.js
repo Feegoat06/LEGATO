@@ -6,14 +6,15 @@
      • OrthographicCamera matching canvas CSS pixel dimensions
      • 3D Simplex-Noise vertex shader for organic breathing drift
      • Multi-frequency sin layering driven by uBass / uEnergy
-     • Scatter ↔ assemble state machine (idle / playback / settling)
+     • Scatter ↔ assemble state machine (idle / playback / paused / settling)
      • Additive-blending "bloom" second pass for soft glow
      • Tone.Analyser tap for bass / energy uniforms (graceful fallback)
 ------------------------------------------------------------------ */
 
-const MAX_PARTICLES = 8000;
-const MAX_DPR       = 2;
-const GOLD          = [209, 161, 90];
+const DESKTOP_PARTICLES = 16000;
+const COMPACT_PARTICLES = 8000;
+const MAX_DPR           = 2;
+const GOLD              = [209, 161, 90];
 
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
 const ease  = (t) => 1 - (1 - clamp(t)) ** 3;
@@ -75,9 +76,14 @@ uniform float uBass;
 uniform float uEnergy;
 uniform float uProgress;
 uniform float uScatterT;   // 0 = assembled, 1 = fully scattered
+uniform float uCanvasW;
 uniform float uCanvasH;    // canvas CSS height for y-flip
 uniform float uPixelRatio; // for gl_PointSize
 uniform float uBloomMult;  // 1.0 for main pass, >1 for bloom
+uniform float uMotionStrength;
+uniform float uPointerActive;
+uniform float uPointerRadius;
+uniform vec2  uPointer;
 
 attribute float aSeed;
 attribute float aOrder;
@@ -97,19 +103,33 @@ void main() {
   float s2 = fract(sin(aSeed * 78.233  + 2.0) * 43758.5453);
   float s3 = fract(sin(aSeed * 39.346  + 3.0) * 43758.5453);
 
-  // ── Organic idle breathing ────────────────────────────────────────
-  // Simplex noise gives slow turbulence; sin layers add fine-grain shimmer
-  float nAmp = 2.8 + uBass * 2.6 + uEnergy * 1.8;
-  float nT   = uTime * 0.23;
-  float nX   =  snoise(vec3(pos.x * 0.0038, pos.y * 0.0076, nT)) * nAmp;
-  float nY   =  snoise(vec3(pos.x * 0.0038 + 100.0, pos.y * 0.0076, nT * 0.66)) * nAmp
-             +  sin(uTime * 0.37 + pos.x * 0.018 + s1 * 6.2832) * (0.78 + uBass * 0.80)
-             +  sin(uTime * 0.20 + pos.x * 0.009 + aMeasure)    * 0.42
-             +  sin(uTime * 0.07 + pos.x * 0.003 + s2 * 3.14)   * 0.20;
+  // ── Readable orbital breathing ────────────────────────────────────
+  // Every point stays close to its notation origin. Phase offsets across x
+  // turn the small ellipses into broad travelling waves without deforming
+  // the glyph silhouettes enough to hurt legibility.
+  float nT       = uTime * 0.19;
+  float phase    = uTime * 0.72 + pos.x * 0.014 + aMeasure * 0.82 + s1 * 0.74;
+  float wave     = sin(uTime * 0.34 + pos.x * 0.0105 + pos.y * 0.022 + aMeasure * 0.56);
+  float shimmer  = 0.5 + 0.5 * sin(phase * 0.74 + wave * 0.65);
+  float orbitAmp = 0.82 + s2 * 0.46 + uBass * 0.24;
+  vec2 center    = vec2(uCanvasW * 0.5, uCanvasH * 0.5);
+  float camScale = 1.0 + sin(uTime * 0.43) * 0.0017 * uMotionStrength;
+  vec2 camDrift  = center + (pos.xy - center) * camScale - pos.xy;
+  float nX       = (cos(phase) * orbitAmp
+                   + snoise(vec3(pos.x * 0.0036, pos.y * 0.0072, nT)) * 0.62
+                   + camDrift.x) * uMotionStrength;
+  float nY       = (sin(phase) * orbitAmp * 1.18
+                   + wave * (0.58 + uEnergy * 0.22)
+                   + snoise(vec3(pos.x * 0.0036 + 100.0, pos.y * 0.0072, nT * 0.71)) * 0.48
+                   + camDrift.y) * uMotionStrength;
 
-  // ── Scatter displacement (random per particle, slow drift) ────────
-  float scX = (s1 - 0.5) * 78.0;
-  float scY = (s2 - 0.5) * 58.0 + sin(uTime * 0.048 + s3 * 6.2832) * 9.0;
+  // ── Star-field scatter displacement ──────────────────────────────
+  float scatterAngle = s1 * 6.2832;
+  float scatterReach = 0.38 + s2 * 0.62;
+  float scX = cos(scatterAngle) * min(270.0, uCanvasW * 0.34) * scatterReach
+            + sin(uTime * 0.052 + s3 * 6.2832) * 16.0;
+  float scY = sin(scatterAngle) * min(170.0, uCanvasH * 0.46) * scatterReach
+            + cos(uTime * 0.044 + s2 * 6.2832) * 12.0;
 
   // ── Assembly progress for this individual particle ────────────────
   float dist      = uProgress - aOrder;
@@ -120,6 +140,12 @@ void main() {
 
   pos.x += mix(nX, scX, effScatter);
   pos.y += mix(nY, scY, effScatter);
+  float hover = uPointerActive * (1.0 - smoothstep(
+    uPointerRadius * 0.18,
+    uPointerRadius,
+    distance(pos.xy, uPointer)
+  ));
+
   // Subtle z pulsation (visible in perspective-free ortho as size modulation)
   pos.z  = snoise(vec3(pos.x * 0.0026, pos.y * 0.0026, uTime * 0.09)) * 1.4
          + uBass * 0.7;
@@ -129,18 +155,20 @@ void main() {
   // ── Point size ───────────────────────────────────────────────────
   float isFrontier = step(abs(dist), 0.026);
   float isActive   = step(abs(dist), 0.062);
-  float sz         = (1.6 + s3 * 1.3 + uBass * 0.7) * uPixelRatio;
-  sz *= (1.0 + isFrontier * 0.85 + isActive * 0.36) * uBloomMult;
+  float sz         = (1.02 + s3 * 0.76 + uBass * 0.34) * uPixelRatio;
+  sz *= (1.0 + isFrontier * 0.62 + isActive * 0.22 + hover * 0.32
+        + shimmer * 0.08 * uMotionStrength) * uBloomMult;
   gl_PointSize = sz;
 
   // ── Alpha ────────────────────────────────────────────────────────
-  float idleA     = 0.64 + s1 * 0.26;
-  float playbackA = 0.26 + assembled * 0.58 + isActive * 0.24;
-  vAlpha = mix(idleA, playbackA, step(0.01, uScatterT));
+  float idleA     = 0.73 + s1 * 0.18 + shimmer * 0.08 * uMotionStrength;
+  float playbackA = 0.18 + assembled * 0.68 + isActive * 0.18;
+  vAlpha = min(1.0, mix(idleA, playbackA, step(0.01, uScatterT)) + hover * 0.20);
 
   // ── Brightness ──────────────────────────────────────────────────
-  vBright = 0.80 + isFrontier * 0.32 + isActive * 0.22
-          + uBass * 0.18 + uEnergy * 0.09;
+  vBright = 0.88 + isFrontier * 0.30 + isActive * 0.18
+          + uBass * 0.16 + uEnergy * 0.08 + hover * 0.82
+          + shimmer * 0.14 * uMotionStrength;
 
   vCol = aCol;
 }
@@ -189,6 +217,11 @@ export function createScoreParticles(canvas) {
   const stateEl = stage?.querySelector('#score-fx-state');
   const mq      = window.matchMedia('(prefers-reduced-motion: reduce)');
   let   rm      = mq.matches;
+  const compact = window.matchMedia('(max-width: 700px), (pointer: coarse)').matches
+    || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)
+    || (navigator.deviceMemory && navigator.deviceMemory <= 4);
+  const particleCap = compact ? COMPACT_PARTICLES : DESKTOP_PARTICLES;
+  const sampleStep  = compact ? 2 : 1;
 
   /* ── Three.js renderer ─────────────────────────────────────────── */
   const renderer = new T.WebGLRenderer({
@@ -217,14 +250,20 @@ export function createScoreParticles(canvas) {
   const uEnergy     = { value: 0 };
   const uProgress   = { value: 0 };
   const uScatterT   = { value: 0 };
+  const uCanvasW    = { value: 1 };
   const uCanvasH    = { value: 1 };
   const uPixelRatio = { value: renderer.getPixelRatio() };
   const uDotTex     = { value: makeDotTexture(T) };
+  const uMotionStrength = { value: rm ? 0 : 1 };
+  const uPointerActive  = { value: 0 };
+  const uPointerRadius  = { value: compact ? 82 : 112 };
+  const uPointer        = { value: new T.Vector2(-10000, -10000) };
 
   // Main pass (normal blending, tight point size)
   const mainUniforms = {
     uTime, uBass, uEnergy, uProgress, uScatterT,
-    uCanvasH, uPixelRatio, uDotTex,
+    uCanvasW, uCanvasH, uPixelRatio, uDotTex,
+    uMotionStrength, uPointerActive, uPointerRadius, uPointer,
     uBloomMult:  { value: 1.0 },
     uBloomAlpha: { value: 1.0 },
   };
@@ -232,9 +271,10 @@ export function createScoreParticles(canvas) {
   // Bloom pass (additive blending, enlarged points for soft halo)
   const bloomUniforms = {
     uTime, uBass, uEnergy, uProgress, uScatterT,
-    uCanvasH, uPixelRatio, uDotTex,
-    uBloomMult:  { value: 2.5 },
-    uBloomAlpha: { value: 0.20 },
+    uCanvasW, uCanvasH, uPixelRatio, uDotTex,
+    uMotionStrength, uPointerActive, uPointerRadius, uPointer,
+    uBloomMult:  { value: 2.15 },
+    uBloomAlpha: { value: 0.16 },
   };
 
   const matBase = {
@@ -259,6 +299,7 @@ export function createScoreParticles(canvas) {
     if (w === cW && h === cH && camera) return;
     cW = w; cH = h;
     renderer.setSize(w, h, false); // false = don't override CSS width/height
+    uCanvasW.value    = w;
     uCanvasH.value    = h;
     uPixelRatio.value = renderer.getPixelRatio();
     if (camera) {
@@ -433,11 +474,11 @@ export function createScoreParticles(canvas) {
       const rctx = rc.getContext('2d', { willReadFrequently: true });
       rctx.drawImage(img, 0, 0, w, h);
       const data = rctx.getImageData(0, 0, w, h);
-      let sp = 3;
+      let sp = sampleStep;
       let list = samplePx(data, w, h, sp);
-      while (list.length > MAX_PARTICLES && sp < 8) { sp++; list = samplePx(data, w, h, sp); }
+      while (list.length > particleCap && sp < 8) { sp++; list = samplePx(data, w, h, sp); }
       if (gen !== sampleGen || !list.length) return false;
-      buildGeo(list.slice(0, MAX_PARTICLES));
+      buildGeo(list.slice(0, particleCap));
       stage?.classList.add('has-full-particles');
       return true;
     } finally {
@@ -466,13 +507,15 @@ export function createScoreParticles(canvas) {
       uScatterT.value = 0;
     } else if (mode === 'playback') {
       uScatterT.value = ease(elapsed / 280);
+    } else if (mode === 'paused') {
+      uScatterT.value = 1;
     } else if (mode === 'settling') {
       uScatterT.value = 1 - ease(elapsed / 700);
       if (elapsed >= 700) {
         mode = 'idle';
         modeStartedAt = now;
         uScatterT.value = 0;
-        stage?.classList.remove('is-particle-playing', 'is-particle-settling');
+        stage?.classList.remove('is-particle-playing', 'is-particle-paused', 'is-particle-settling');
         stage?.style.setProperty('--score-progress', '0%');
         setLabel('Score breathing');
       }
@@ -508,7 +551,7 @@ export function createScoreParticles(canvas) {
     progress = 0;
     activeMeasure = null;
     modeStartedAt = performance.now();
-    stage?.classList.remove('is-particle-settling');
+    stage?.classList.remove('is-particle-paused', 'is-particle-settling');
     stage?.classList.add('is-particle-playing');
     stage?.style.setProperty('--score-progress', '0%');
     setLabel('Notation dispersing');
@@ -523,20 +566,51 @@ export function createScoreParticles(canvas) {
     if (measureIndex != null) setLabel(`Assembling measure ${ measureIndex + 1 }`);
   }
 
-  function settle() {
-    if (mode === 'idle') return;
-    mode = rm ? 'idle' : 'settling';
+  function settle({ preserveProgress = false, immediate = false } = {}) {
+    stage?.classList.remove('is-particle-playing', 'is-particle-paused', 'is-particle-settling');
+    if (preserveProgress && (mode === 'playback' || mode === 'paused') && progress < 1) {
+      mode = 'paused';
+      modeStartedAt = performance.now();
+      uScatterT.value = 1;
+      stage?.classList.add('is-particle-paused');
+      setLabel(`Paused at ${ Math.round(progress * 100) }%`);
+      ensureLoop();
+      return;
+    }
+    if (preserveProgress) immediate = true;
+    progress = 1;
+    mode = immediate || rm ? 'idle' : 'settling';
     modeStartedAt = performance.now();
-    stage?.classList.remove('is-particle-playing');
-    stage?.classList.toggle('is-particle-settling', !rm);
-    setLabel(rm ? 'Score breathing' : 'Recalling the score');
+    uScatterT.value = mode === 'idle' ? 0 : uScatterT.value;
+    stage?.classList.toggle('is-particle-settling', mode === 'settling');
+    stage?.style.setProperty('--score-progress', '0%');
+    setLabel(mode === 'idle' ? 'Score breathing' : 'Recalling the score');
     ensureLoop();
   }
 
   mq.addEventListener?.('change', (e) => {
     rm = e.matches;
-    if (rm && mode === 'settling') mode = 'idle';
+    uMotionStrength.value = rm ? 0 : 1;
+    uPointerActive.value = rm ? 0 : uPointerActive.value;
+    if (rm && mode === 'settling') {
+      mode = 'idle';
+      uScatterT.value = 0;
+      stage?.classList.remove('is-particle-settling');
+      setLabel('Score breathing');
+    }
   });
+
+  stage?.addEventListener('pointermove', (event) => {
+    if (rm) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    uPointer.value.set(
+      (event.clientX - rect.left) * cW / rect.width,
+      cH - (event.clientY - rect.top) * cH / rect.height,
+    );
+    uPointerActive.value = 1;
+  }, { passive: true });
+  stage?.addEventListener('pointerleave', () => { uPointerActive.value = 0; }, { passive: true });
 
   syncCamera();
   ensureLoop();
