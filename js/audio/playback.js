@@ -14,6 +14,27 @@ function getSampler() {
 
 const frequency = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
+function sameNotes(first, second) {
+  return first.length === second.length && first.every((note, index) => note === second[index]);
+}
+
+/** Coalesce contiguous tied fragments into one sustained playback event. */
+export function coalesceTiedSegments(segments, measureLength) {
+  const events = [];
+  for (const segment of segments) {
+    const startBeat = segment.measureIndex * measureLength + segment.startBeat;
+    const previous = events.at(-1);
+    const previousEnd = previous ? previous.startBeat + previous.durationBeats : null;
+    if (previous && previous.sourceId === segment.sourceId && sameNotes(previous.notes, segment.notes)
+      && Math.abs(previousEnd - startBeat) < 1e-9) {
+      previous.durationBeats += segment.durationBeats;
+      continue;
+    }
+    events.push({ ...segment, notes: [...segment.notes], startBeat });
+  }
+  return events;
+}
+
 export async function playSegments(segments, settings, onMeasure, onStop) {
   stopPlayback();
   await Tone.start();
@@ -24,14 +45,13 @@ export async function playSegments(segments, settings, onMeasure, onStop) {
   const now = Tone.now() + 0.08;
   let end = 0;
   let lastMeasure = -1;
-  for (const segment of segments) {
-    const beat = segment.measureIndex * measureLength + segment.startBeat;
-    const at = beat * secondsPerBeat;
-    instrument.triggerAttackRelease(segment.notes.map(frequency), segment.durationBeats * secondsPerBeat * 0.96, now + at);
-    end = Math.max(end, at + segment.durationBeats * secondsPerBeat);
-    if (segment.measureIndex !== lastMeasure) {
-      stopTimers.push(setTimeout(() => onMeasure(segment.measureIndex), at * 1000));
-      lastMeasure = segment.measureIndex;
+  for (const event of coalesceTiedSegments(segments, measureLength)) {
+    const at = event.startBeat * secondsPerBeat;
+    instrument.triggerAttackRelease(event.notes.map(frequency), event.durationBeats * secondsPerBeat * 0.96, now + at);
+    end = Math.max(end, at + event.durationBeats * secondsPerBeat);
+    if (event.measureIndex !== lastMeasure) {
+      stopTimers.push(setTimeout(() => onMeasure(event.measureIndex), at * 1000));
+      lastMeasure = event.measureIndex;
     }
   }
   stopTimers.push(setTimeout(() => { onMeasure(null); onStop?.(); }, (end + 0.1) * 1000));

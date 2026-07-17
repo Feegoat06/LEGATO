@@ -34,7 +34,7 @@
             <label><span>Key signature</span><select id="key-signature"><option value="-3">E♭ · 3 flats</option><option value="-2">B♭ · 2 flats</option><option value="-1">F · 1 flat</option><option value="0" selected>C · no accidentals</option><option value="1">G · 1 sharp</option><option value="2">D · 2 sharps</option><option value="3">A · 3 sharps</option></select></label>
             <label><span>Clef</span><select id="clef"><option value="auto">Auto</option><option value="treble">Treble</option><option value="bass">Bass</option></select></label>
           </div>
-          <p class="field-note">Key signature controls notation spelling only.</p>
+          <p class="field-note">Key signature moves only its matching natural notes by a sharp or flat; it never globally transposes the progression.</p>
         </section>
 
         <section class="editor-section" aria-labelledby="chords-title">
@@ -54,7 +54,7 @@
     <main class="score-pane">
       <header class="score-header">
         <div><p class="kicker">Compiled score</p><h2>Your Progression!</h2></div>
-        <div class="score-meta"><span><i class="user-dot"></i>User voicing</span><span><i class="technique-dot"></i>Technique</span><span id="score-summary">0 measures</span></div>
+        <div class="score-meta"><span><i class="user-dot"></i>User voicing</span><span><i class="technique-dot"></i>Technique</span><span id="score-summary">0 measures</span><output id="score-zoom-value" class="score-zoom" aria-live="polite">100% · scroll score to zoom</output></div>
       </header>
 
       <section class="notation-stage" aria-label="Progression notation">

@@ -1,6 +1,7 @@
 import { availableBeats, chordTotalBeats, compile, makeChord, reconcileSeams, barsToBeats, beatsToBars } from './state.js';
 import { makeDefaultProgression } from './data/demo-progressions.js';
 import { chordDisplayName, noteName } from './engine/chords.js';
+import { applyKeySignature } from './engine/key-signature.js';
 import { TECHNIQUES } from './engine/techniques.js';
 import { evaluateAllTechniques } from './engine/technique-eligibility.js';
 import { renderNotation } from './notation/render.js';
@@ -13,6 +14,9 @@ let progression = makeDefaultProgression();
 let segments = [];
 let editingId = null;
 let selectedSeam = 0;
+let scoreZoom = 1;
+const keySourceNotes = new Map();
+const keySourceHints = new Map();
 
 const $ = (selector) => document.querySelector(selector);
 const elements = { chords: $('#chord-list'), seams: $('#seam-list'), score: $('#score'), coach: $('#coach-output') };
@@ -28,9 +32,29 @@ function syncControls() {
 function replaceChords(nextChords) {
   progression.seams = reconcileSeams(progression.chords, progression.seams, nextChords);
   progression.chords = nextChords;
+  rememberKeySources(nextChords);
   resetIneligibleSeams();
   selectedSeam = Math.min(selectedSeam, Math.max(0, progression.seams.length - 1));
   rerender();
+}
+
+function rememberKeySources(chords) {
+  chords.forEach((chord) => {
+    if (!keySourceNotes.has(chord.id)) keySourceNotes.set(chord.id, [...chord.notes]);
+    if (!keySourceHints.has(chord.id)) keySourceHints.set(chord.id, chord.hint ? { ...chord.hint } : null);
+  });
+}
+
+function applyKeyToMaterial() {
+  rememberKeySources(progression.chords);
+  progression.chords.forEach((chord) => {
+    const sourceNotes = keySourceNotes.get(chord.id);
+    chord.notes = applyKeySignature(sourceNotes, progression.settings.key);
+    const changed = chord.notes.some((note, index) => note !== sourceNotes[index]);
+    if (changed) delete chord.hint;
+    else if (keySourceHints.get(chord.id)) chord.hint = { ...keySourceHints.get(chord.id) };
+  });
+  resetIneligibleSeams();
 }
 
 function resetIneligibleSeams() {
@@ -99,9 +123,16 @@ function saveChord(input) {
     const chord = progression.chords.find((item) => item.id === editingId);
     const { hint: _oldHint, ...withoutHint } = chord;
     Object.assign(chord, withoutHint, input);
+    keySourceNotes.set(chord.id, [...input.notes]);
+    keySourceHints.set(chord.id, input.hint ? { ...input.hint } : null);
+    chord.notes = applyKeySignature(input.notes, progression.settings.key);
     if (!input.hint) delete chord.hint;
   } else {
-    progression.chords.push(makeChord(input.notes, input.bars, input.hint));
+    const chord = makeChord(input.notes, input.bars, input.hint);
+    keySourceNotes.set(chord.id, [...input.notes]);
+    keySourceHints.set(chord.id, input.hint ? { ...input.hint } : null);
+    chord.notes = applyKeySignature(input.notes, progression.settings.key);
+    progression.chords.push(chord);
     if (progression.chords.length > 1) progression.seams.push(null);
   }
   resetIneligibleSeams();
@@ -168,7 +199,7 @@ function rerender() {
 
 populateChordControls($('#piano-dialog'));
 $('#add-chord').onclick = () => { editingId = null; openPianoModal($('#piano-dialog'), null, saveChord, progression.settings.timeSig); };
-$('#reset-example').onclick = () => { stopPlayback(); progression = makeDefaultProgression(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
+$('#reset-example').onclick = () => { stopPlayback(); progression = makeDefaultProgression(); keySourceNotes.clear(); keySourceHints.clear(); applyKeyToMaterial(); selectedSeam = 0; setActiveMeasure(null); clearCoach(); $('#playback-status').value = 'Example restored'; $('#playback-pulse').classList.remove('active'); rerender(); };
 $('#play').onclick = async () => {
   $('#play').disabled = true; $('#playback-pulse').classList.add('active'); $('#playback-status').value = 'Loading piano…';
   try {
@@ -180,7 +211,19 @@ $('#play').onclick = async () => {
 $('#stop').onclick = () => { stopPlayback(); setActiveMeasure(null); $('#play').disabled = false; $('#playback-pulse').classList.remove('active'); $('#playback-status').value = 'Stopped'; };
 $('#tempo').oninput = (event) => { progression.settings.tempo = Number(event.target.value); $('#tempo-value').value = event.target.value; };
 $('#time-signature').onchange = (event) => { const [num, den] = event.target.value.split('/').map(Number); progression.settings.timeSig = { num, den }; clearCoach(); rerender(); };
-$('#key-signature').onchange = (event) => { progression.settings.key = Number(event.target.value); rerender(); };
+$('#key-signature').onchange = (event) => { progression.settings.key = Number(event.target.value); applyKeyToMaterial(); clearCoach(); rerender(); };
 $('#clef').onchange = (event) => { progression.settings.clef = event.target.value; rerender(); };
+function setScoreZoom(nextZoom) {
+  scoreZoom = Math.max(0.7, Math.min(1.5, Math.round(nextZoom * 10) / 10));
+  elements.score.style.zoom = String(scoreZoom);
+  $('#score-zoom-value').textContent = `${Math.round(scoreZoom * 100)}% · scroll score to zoom`;
+}
+$('.notation-stage').addEventListener('wheel', (event) => {
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  setScoreZoom(scoreZoom + (event.deltaY < 0 ? 0.1 : -0.1));
+}, { passive: false });
 window.addEventListener('resize', () => renderNotation(elements.score, segments, progression.settings));
+applyKeyToMaterial();
 rerender();
+setScoreZoom(scoreZoom);

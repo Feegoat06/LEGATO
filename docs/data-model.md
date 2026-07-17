@@ -59,7 +59,7 @@ from colliding.
 |---|---|---|---|
 | `tempo` | number (BPM) | Playback speed. | **Player-only.** `compile()` ignores it - tempo changes never re-run compile. |
 | `timeSig` | `{ num, den }` | Time signature, e.g. `{num:5, den:4}`. | Structural. Measure length (in quarter-beats) = `num * 4 / den`. See §4. |
-| `key` | integer -7..+7 | Key signature on the circle of fifths: sharps positive, flats negative. C=0, G=+1, F=-1, Bb=-2... | **Spelling only.** Chooses sharp-vs-flat when turning a MIDI number into a VexFlow keystring. Never touches audio or voice-leading. |
+| `key` | integer -7..+7 | Key signature on the circle of fifths: sharps positive, flats negative. C=0, G=+1, F=-1, Bb=-2... | Applies only the signature’s named sharps/flats to matching natural material (for example F → F♯ in G). It is **not** a global transposition. It also selects notation spelling. |
 | `clef` | `'auto' \| 'treble' \| 'bass'` | One clef for the whole progression (no grand staff). | `'auto'` = pick from median pitch at render time (below middle C -> bass, else treble). Store the user's literal choice; resolve `'auto'` only when rendering. |
 
 ### 1.2 `chords`

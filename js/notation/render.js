@@ -71,6 +71,7 @@ export function renderNotation(container, segments, settings) {
       });
       const color = segment.isTechnique ? techniqueColor : userColor;
       staveNote.setStyle({ fillStyle: color, strokeStyle: color });
+      staveNote.setLedgerLineStyle?.({ fillStyle: color, strokeStyle: color });
       notesBySource.push({ segment, note: staveNote });
       return staveNote;
     });

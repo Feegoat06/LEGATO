@@ -256,7 +256,7 @@ Keep the existing theory guardrails, with these refinements:
 - Explain jargon briefly when it is first used, but do not oversimplify established concepts.
 - Ground factual claims in exact supplied notes and technique metadata.
 - Distinguish observed facts from interpretive musical effect.
-- Never infer a global key from `settings.key`; per the data model, that field controls notation spelling only.
+- Never infer a global tonal center from `settings.key`; it applies its named sharps/flats to material, but is not proof of a tonal center.
 - Never claim a shared tone, resolved tendency tone, parsimonious movement, or bass motion unless the supplied MIDI notes support it.
 - When the data is insufficient, state the limitation plainly.
 
