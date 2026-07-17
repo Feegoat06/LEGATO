@@ -77,11 +77,24 @@
 
   <dialog id="piano-dialog">
     <form method="dialog" class="dialog-shell" onsubmit="return false">
-      <header class="dialog-header"><div><p class="kicker">Explicit MIDI voicing</p><h2>Shape the chord</h2><p>Choose a harmonic starting point, then toggle any key to control octave, doubling, and inversion.</p></div><button id="modal-cancel" class="close-button" aria-label="Close chord editor">×</button></header>
-      <div class="modal-controls"><label><span>Root</span><select id="modal-root"></select></label><label><span>Quality</span><select id="modal-quality"></select></label><label><span>Duration</span><select id="modal-bars"><option value="0.5">½ bar</option><option value="1" selected>1 bar</option><option value="1.5">1½ bars</option><option value="2">2 bars</option><option value="3">3 bars</option><option value="4">4 bars</option></select></label><button id="apply-quality" class="outline-button" type="button">Reset quality voicing</button></div>
-      <div class="piano-instruction"><span>21</span><p>Full piano range · click keys to toggle exact notes</p><span>108</span></div>
-      <div id="piano-keys" class="piano" role="group" aria-label="Piano note selector"></div>
-      <div class="selection-readout"><div><span>Selected MIDI notes</span><strong id="selected-midi">—</strong></div><div><span>Pitch names</span><strong id="selected-notes">No notes selected</strong></div></div>
+      <header class="dialog-header"><div><p class="kicker">Explicit voicing</p><h2>Shape the chord</h2><p>Pick a root and quality, then toggle any key to shape the octave, doubling, and inversion.</p></div><button id="modal-cancel" class="close-button" aria-label="Close chord editor">×</button></header>
+      <div class="modal-controls"><label><span>Root</span><select id="modal-root"></select></label><label><span>Duration</span><select id="modal-bars"><option value="0.5">½ bar</option><option value="1" selected>1 bar</option><option value="1.5">1½ bars</option><option value="2">2 bars</option><option value="3">3 bars</option><option value="4">4 bars</option></select></label></div>
+      <div class="quality-chips" id="modal-quality-chips" role="group" aria-label="Chord quality"></div>
+      <div class="piano-stage">
+        <div class="piano-column">
+          <div class="piano-instruction"><p>Click keys to toggle exact notes</p></div>
+          <div id="piano-keys" class="piano" role="group" aria-label="Piano note selector"></div>
+          <div class="selection-readout"><div><span>Pitch names</span><strong id="selected-notes">No notes selected</strong></div></div>
+        </div>
+        <aside class="preview-panel" aria-label="Chord preview">
+          <div class="preview-header"><span>Preview</span><span id="octave-readout">Octave 4</span></div>
+          <div class="preview-sheet" id="preview-sheet"></div>
+          <div class="octave-controls">
+            <button type="button" id="octave-down" aria-label="Shift down one octave">▼ Octave</button>
+            <button type="button" id="octave-up" aria-label="Shift up one octave">▲ Octave</button>
+          </div>
+        </aside>
+      </div>
       <footer class="dialog-footer"><p id="voicing-status">The exact selected notes are stored—never an inversion preset.</p><button id="modal-save" class="save-button" type="button">Save exact voicing <span>→</span></button></footer>
     </form>
   </dialog>

@@ -40,7 +40,7 @@ function renderChords() {
   progression.chords.forEach((chord, index) => {
     const row = document.createElement('article');
     row.className = 'chord-row';
-    const notes = chord.notes.map((note) => `${noteName(note, progression.settings.key)} / ${note}`).join(' · ');
+    const notes = chord.notes.map((note) => noteName(note, progression.settings.key)).join(' · ');
     row.innerHTML = `<button class="chord-main" aria-label="Edit chord ${index + 1}"><strong>${String(index + 1).padStart(2, '0')} · ${chordDisplayName(chord, progression.settings.key)}</strong><small>${notes}</small></button><select class="chord-bars" aria-label="Bars for chord ${index + 1}">${[0.5,1,1.5,2,3,4].map((bars) => `<option value="${bars}" ${bars === chord.bars ? 'selected' : ''}>${bars}</option>`).join('')}</select><button class="delete-button" aria-label="Delete chord ${index + 1}">×</button>`;
     row.querySelector('.chord-main').onclick = () => { editingId = chord.id; openPianoModal($('#piano-dialog'), chord, saveChord); };
     row.querySelector('.chord-bars').onchange = (event) => { chord.bars = Number(event.target.value); rerender(); };
