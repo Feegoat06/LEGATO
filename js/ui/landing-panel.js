@@ -44,7 +44,7 @@ const TEMPLATE = `
           <input id="landing-import-file" type="file" accept="application/json,.json" hidden />
         </div>
         <div class="landing-section-actions">
-          <button id="landing-new" class="landing-primary" type="button">+ New</button>
+          <button id="landing-new" class="landing-primary" type="button">+ New Project</button>
         </div>
       </div>
       <div id="landing-recent-grid" class="landing-grid landing-grid-rail"></div>
