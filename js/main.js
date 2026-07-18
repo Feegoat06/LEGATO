@@ -13,7 +13,7 @@
  *                                            → playSegments()
  *                                            → sheetMusic.setActiveMeasure()
  */
-import { compile, makeChord, reconcileSeams, beatsToBars } from './state.js';
+import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } from './state.js';
 import { makeDefaultProgression } from './data/demo-progressions.js';
 import { chordDisplayName } from './engine/chords.js';
 import { applyKeySignature } from './engine/key-signature.js';
@@ -54,6 +54,7 @@ const editor = mountEditorPanel({
     },
     onTimeSigChange(timeSig) {
       progression.settings.timeSig = timeSig;
+      resetIneligibleSeams();
       coach.setEmpty();
       rerender();
     },
@@ -80,6 +81,7 @@ const editor = mountEditorPanel({
     },
     onSetChordBeats(chord, beats) {
       chord.bars = beatsToBars(beats, progression.settings.timeSig);
+      resetIneligibleSeams();
       rerender();
     },
     onSelectSeam(index) {
@@ -151,8 +153,11 @@ function applyKeyToMaterial() {
 function resetIneligibleSeams() {
   progression.seams = progression.seams.map((techniqueId, index) => {
     if (!techniqueId) return null;
-    return evaluateAllTechniques(progression.chords[index], progression.chords[index + 1])
-      .find((technique) => technique.id === techniqueId)?.valid ? techniqueId : null;
+    const technique = evaluateAllTechniques(progression.chords[index], progression.chords[index + 1])
+      .find((candidate) => candidate.id === techniqueId);
+    return technique?.valid && isTechniqueUsable(technique, progression.chords[index], progression.settings.timeSig)
+      ? techniqueId
+      : null;
   });
 }
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeChord, makeProgression, reconcileSeams, validateProgression } from '../js/state.js';
+import { isTechniqueUsable, makeChord, makeProgression, reconcileSeams, validateProgression } from '../js/state.js';
 
 test('reconcileSeams preserves only unchanged adjacency', () => {
   const a = makeChord([60, 64, 67]), b = makeChord([62, 65, 69]), c = makeChord([64, 67, 71]);
@@ -13,4 +13,11 @@ test('validation drops unknown techniques and rejects out-of-range notes', () =>
   const result = validateProgression(progression);
   assert.equal(result.ok, true); assert.deepEqual(result.progression.seams, [null]); assert.equal(result.warnings.length, 1);
   progression.chords[0].notes = [200]; assert.equal(validateProgression(progression).ok, false);
+});
+
+test('technique usability leaves at least one beat in the departing chord', () => {
+  const shortChord = makeChord([60, 64, 67], .5);
+  const timeSig = { num: 4, den: 4 };
+  assert.equal(isTechniqueUsable({ beatCost: 1 }, shortChord, timeSig), true);
+  assert.equal(isTechniqueUsable({ beatCost: 2 }, shortChord, timeSig), false);
 });

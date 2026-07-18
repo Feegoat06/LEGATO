@@ -6,7 +6,7 @@
  * back through `callbacks`. Every render is idempotent — main.js calls
  * `render(state)` after any mutation and this rebuilds the chord/seam rows.
  */
-import { availableBeats, chordTotalBeats, barsToBeats, beatsToBars } from '../state.js';
+import { availableBeats, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable } from '../state.js';
 import { chordDisplayName, noteName } from '../engine/chords.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { escapeHtml } from '../util/html.js';
@@ -137,10 +137,10 @@ export function mountEditorPanel({ container, callbacks }) {
     return `${ beats } beat${ beats > 1 ? 's' : '' }`;
   }
 
-  function addTechniqueOptions(select, techniques, budget) {
+  function addTechniqueOptions(select, techniques, departingChord, timeSig, budget) {
     select.add(new Option('Direct transition (None)', ''));
     techniques.forEach((technique) => {
-      const affordable = technique.beatCost <= budget;
+      const affordable = isTechniqueUsable(technique, departingChord, timeSig);
       const option = new Option(`${ technique.name } · ${ formatBeatCost(technique.beatCost) }`, technique.id, false, false);
       option.disabled = !technique.valid || !affordable;
       option.title = !technique.valid ? technique.reason : (!affordable ? `Requires ${ formatBeatCost(technique.beatCost) }; only ${ budget } available.` : '');
@@ -179,7 +179,7 @@ export function mountEditorPanel({ container, callbacks }) {
     seam.querySelector('.transition-explain').onclick = () => callbacks.onExplainSeam(index);
     const select = seam.querySelector('.transition-select');
     if (select) {
-      addTechniqueOptions(select, techniques, budget);
+      addTechniqueOptions(select, techniques, fromChord, progression.settings.timeSig, budget);
       select.value = selectedTechniqueId ?? '';
       select.onchange = () => {
         const techniqueId = select.value || null;

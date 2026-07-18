@@ -123,6 +123,11 @@ export function availableBeats(departingTotalBeats) {
     return Math.max(0, Math.min(departingTotalBeats - 1, 4));
 }
 
+/** Whether a transition technique fits into the departing chord's available tail. */
+export function isTechniqueUsable(technique, departingChord, timeSig) {
+    return technique.beatCost <= availableBeats(chordTotalBeats(departingChord, timeSig));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // USER-FACING BEATS — the UI shows "beats", state stores `bars`.
 // One "beat" == what a pianist counts: quarter note in simple meter, dotted
