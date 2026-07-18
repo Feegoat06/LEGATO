@@ -8,6 +8,12 @@ test('reconcileSeams preserves only unchanged adjacency', () => {
   assert.deepEqual(reconcileSeams([a, b, c], ['passingDim', 'secondaryDom'], [b, c]), ['secondaryDom']);
 });
 
+test('makeProgression fills omitted seams with direct transitions', () => {
+  const chords = [makeChord([60]), makeChord([62]), makeChord([64]), makeChord([65])];
+  const progression = makeProgression({ chords, seams: ['secondaryDom'] });
+  assert.deepEqual(progression.seams, ['secondaryDom', null, null]);
+});
+
 test('validation drops unknown techniques and rejects out-of-range notes', () => {
   const progression = makeProgression({ chords: [makeChord([60]), makeChord([64])], seams: ['futureThing'] });
   const result = validateProgression(progression);

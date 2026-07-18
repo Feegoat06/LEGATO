@@ -188,13 +188,26 @@ export function makeChord(notes, bars = 1, hint) {
     return { id: newId('c'), notes: [...notes], bars, ...(hint ? { hint } : {}) };
 }
 
-/** @returns {Progression} */
+/**
+ * Creates a progression with exactly one seam per adjacent chord pair.
+ * Callers may provide only the leading seams they care about; omitted seams
+ * are direct transitions and excess entries are ignored.
+ *
+ * @returns {Progression}
+ */
 export function makeProgression(overrides = {}) {
-    return {
+    const progression = {
         settings: makeSettings(),
         chords: [],
         seams: [],
         ...overrides,
+    };
+    return {
+        ...progression,
+        seams: Array.from(
+            { length: Math.max(0, progression.chords.length - 1) },
+            (_, index) => progression.seams[index] ?? null,
+        ),
     };
 }
 

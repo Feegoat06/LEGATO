@@ -10,8 +10,14 @@
 import { makeChord, makeProgression } from '../state.js';
 import { notesFrom } from '../engine/chords.js';
 
-/** ii-V-I with a tritone sub inserted between the V and I. Loaded at boot. */
+/** The demo loaded at boot. Swap the commented return when projects can select examples. */
 export function makeDefaultProgression() {
+  // return makeIiVIWithTritoneSubProgression();
+  return make4536251PopProgression();
+}
+
+/** ii-V-I with a tritone sub inserted between the V and I. */
+function make_ii_V_I_WithTritoneSubProgression() {
   const chords = [
     makeChord(notesFrom(50, 'Min7'), 1, { rootMidi: 50, quality: 'Min7' }),
     makeChord(notesFrom(55, 'Dom7'), 1, { rootMidi: 55, quality: 'Dom7' }),
@@ -20,6 +26,22 @@ export function makeDefaultProgression() {
   return makeProgression({
     settings: { tempo: 96, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' },
     chords,
-    seams: [null, 'tritoneSub'],
+  });
+}
+
+/** 4–5–3–6–2–5–1, the ubiquitous pop-song turnaround, in C major. */
+function make4536251PopProgression() {
+  const chords = [
+    makeChord(notesFrom(53, 'Major'), 1, { rootMidi: 53, quality: 'Major' }), // IV: F
+    makeChord(notesFrom(55, 'Major'), 1, { rootMidi: 55, quality: 'Major' }), // V: G
+    makeChord(notesFrom(52, 'Minor'), 1, { rootMidi: 52, quality: 'Minor' }), // iii: Em
+    makeChord(notesFrom(57, 'Minor'), 1, { rootMidi: 57, quality: 'Minor' }), // vi: Am
+    makeChord(notesFrom(50, 'Minor'), 1, { rootMidi: 50, quality: 'Minor' }), // ii: Dm
+    makeChord(notesFrom(55, 'Major'), 1, { rootMidi: 55, quality: 'Major' }), // V: G
+    makeChord(notesFrom(60, 'Major'), 1, { rootMidi: 60, quality: 'Major' }), // I: C
+  ];
+  return makeProgression({
+    settings: { tempo: 96, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' },
+    chords,
   });
 }
