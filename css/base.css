@@ -25,6 +25,13 @@
     box-sizing: border-box
 }
 
+/* Enforce the HTML `hidden` attribute against author display rules — without
+   this, any element that gets a `display: flex/grid/block` also inherits
+   visibility from that rule and ignores the attribute. */
+[hidden] {
+    display: none !important
+}
+
 html,
 body {
     min-height: 100%

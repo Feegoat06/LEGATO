@@ -12,18 +12,11 @@
 
 <body>
   <!--
-    Shell only. Each panel injects its own HTML into a mount point:
-      - #editor-pane-mount     → js/ui/editor-panel.js
-      - #sheet-music-pane-mount → js/ui/sheet-music-panel.js
-                                   (which itself mounts transport + coach)
-      - #piano-modal-mount     → js/ui/piano-modal.js
-    Split for parallel dev: left- and right-panel work touches its own
-    module, not this file.
+    Router-driven shell. The router mounts landing-view or editor-view into
+    #app-root based on the hash route. The piano modal is mounted once and
+    reused by the editor across sessions.
   -->
-  <div class="app-shell">
-    <aside id="editor-pane-mount"></aside>
-    <main id="sheet-music-pane-mount"></main>
-  </div>
+  <div id="app-root"></div>
   <div id="piano-modal-mount"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js"></script>

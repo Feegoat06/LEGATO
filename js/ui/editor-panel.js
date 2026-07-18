@@ -13,21 +13,22 @@ import { escapeHtml } from '../util/html.js';
 
 const TEMPLATE = `
 <header class="brand-block">
-  <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
-  <div><a class="brand" href="#">LEGATO</a>
-    <p>Progression coach</p>
-  </div>
-  <span class="build-tag">EDU / 01</span>
+  <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
+    <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="brand-copy"><span class="brand">LEGATO</span>
+      <span class="brand-subtitle">Progression coach</span>
+    </span>
+  </button>
+  <button id="view-all-projects" class="text-action view-all-projects" type="button">View all projects →</button>
   <button id="toggle-score-settings" class="icon-button" type="button" aria-label="Show score settings" aria-controls="score-settings" aria-expanded="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.6 3.3h4.8l.6 2.2a7.3 7.3 0 0 1 1.7 1l2.1-.7 2.4 4.1-1.6 1.6a7 7 0 0 1 0 2l1.6 1.6-2.4 4.1-2.1-.7a7.3 7.3 0 0 1-1.7 1l-.6 2.2H9.6L9 19.5a7.3 7.3 0 0 1-1.7-1l-2.1.7-2.4-4.1 1.6-1.6a7 7 0 0 1 0-2L2.8 9.9l2.4-4.1 2.1.7a7.3 7.3 0 0 1 1.7-1l.6-2.2Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
   </button>
 </header>
 
 <div class="editor-scroll">
-  <section class="intro-block">
-    <p class="kicker">Composition workspace</p>
-    <h1>Build the space<br><em>between chords.</em></h1>
-    <p class="intro-copy">Place exact piano voicings, shape the connective tissue, then listen for what changed.</p>
+  <section class="project-title-block">
+    <p class="kicker">Project</p>
+    <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
   </section>
 
   <section id="score-settings" class="settings-panel" aria-labelledby="score-settings-title" hidden>
@@ -86,6 +87,9 @@ export function mountEditorPanel({ container, callbacks }) {
   const keySigSelect = container.querySelector('#key-signature');
   const clefSelect = container.querySelector('#clef');
   const addChordBtn = container.querySelector('#add-chord');
+  const brandHomeBtn = container.querySelector('#brand-home');
+  const viewAllBtn = container.querySelector('#view-all-projects');
+  const projectNameInput = container.querySelector('#project-name-input');
   let scoreSettingsOpen = false;
   const expandedSeamIndexes = new Set();
   let directEditorOpenForCurrentRender = null;
@@ -101,6 +105,13 @@ export function mountEditorPanel({ container, callbacks }) {
   keySigSelect.onchange = (event) => callbacks.onKeyChange(Number(event.target.value));
   clefSelect.onchange = (event) => callbacks.onClefChange(event.target.value);
   addChordBtn.onclick = () => callbacks.onAddChord();
+  brandHomeBtn.onclick = () => callbacks.onGoHome();
+  viewAllBtn.onclick = () => callbacks.onGoHome();
+  projectNameInput.onblur = () => callbacks.onRenameProject(projectNameInput.value);
+  projectNameInput.onkeydown = (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); projectNameInput.blur(); }
+    if (event.key === 'Escape') { projectNameInput.value = projectNameInput.dataset.lastCommitted ?? ''; projectNameInput.blur(); }
+  };
   scoreSettingsButton.onclick = () => {
     scoreSettingsOpen = !scoreSettingsOpen;
     scoreSettingsEl.hidden = !scoreSettingsOpen;
@@ -212,9 +223,17 @@ export function mountEditorPanel({ container, callbacks }) {
     });
   }
 
+  function syncProjectName(name) {
+    // Don't overwrite while the user is actively editing.
+    if (document.activeElement === projectNameInput) return;
+    projectNameInput.value = name ?? '';
+    projectNameInput.dataset.lastCommitted = projectNameInput.value;
+  }
+
   return {
-    render({ progression, selectedSeam }) {
+    render({ progression, selectedSeam, projectName }) {
       syncSettings(progression.settings);
+      syncProjectName(projectName);
       renderProgression(progression, selectedSeam);
     },
   };

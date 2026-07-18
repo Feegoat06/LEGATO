@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { availableBeats, compile, makeChord, makeProgression } from '../js/state.js';
 import { TECHNIQUES } from '../js/engine/techniques.js';
 import { getAvailableTechniques } from '../js/engine/technique-eligibility.js';
-import { makeDefaultProgression } from '../js/data/demo-progressions.js';
+import { makeDefaultProgression } from '../js/data/demo-projects.js';
 
 const settings = { tempo: 100, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' };
 test('all eight techniques compile inside their beat budget without re-voicing anchors', () => {

@@ -1,0 +1,397 @@
+/* Landing / projects hub view. Everything below is scoped under .landing-shell
+   so it can't accidentally style the editor pane. */
+
+.landing-shell {
+    min-height: 100vh;
+    background: var(--panel);
+    color: var(--ivory);
+    display: flex;
+    flex-direction: column
+}
+
+.landing-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.landing-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px
+}
+
+.landing-brand .brand {
+    font: 600 1.05rem var(--font-display);
+    letter-spacing: .18em
+}
+
+.landing-tagline {
+    margin-left: auto;
+    color: var(--tan-dim);
+    font: 500 .6rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .18em
+}
+
+.landing-hero {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 64px 40px 44px;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.landing-hero > * {
+    max-width: 860px
+}
+
+.landing-hero h1 {
+    font: 340 clamp(2.6rem, 5vw, 4.7rem)/.92 var(--font-display);
+    letter-spacing: -.04em;
+    margin: 14px 0 20px
+}
+
+.landing-hero h1 em {
+    font-weight: 500;
+    color: var(--anchor)
+}
+
+.landing-lede {
+    color: var(--tan-dim);
+    font-size: .85rem;
+    line-height: 1.65;
+    max-width: 620px;
+    margin: 0
+}
+
+.landing-scroll {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px 80px
+}
+
+.landing-section {
+    padding: 36px 0;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.landing-section:last-of-type {
+    border-bottom: 0
+}
+
+.landing-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.landing-primary,
+.landing-secondary {
+    padding: 11px 20px;
+    border-radius: 999px;
+    font: 500 .72rem var(--font-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background .15s ease
+}
+
+.landing-primary {
+    border: 1px solid var(--anchor);
+    background: var(--anchor);
+    color: var(--ink)
+}
+
+.landing-primary:hover {
+    background: transparent;
+    color: var(--anchor)
+}
+
+.landing-secondary {
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--tan)
+}
+
+.landing-secondary:hover {
+    border-color: rgba(209, 161, 90, .55);
+    color: var(--anchor)
+}
+
+.landing-notice {
+    margin: 16px 0 0;
+    padding: 12px 16px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    color: var(--ivory);
+    font: 400 .8rem var(--font-body)
+}
+
+.landing-notice[data-level="warn"] {
+    border-color: rgba(209, 161, 90, .4);
+    color: var(--anchor)
+}
+
+.landing-notice[data-level="error"] {
+    border-color: rgba(200, 123, 103, .55);
+    color: var(--danger)
+}
+
+.landing-section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 22px;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    text-align: left;
+    width: 100%
+}
+
+.landing-section-head h2 {
+    font: 500 .75rem var(--font-body);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin: 0
+}
+
+.landing-count {
+    color: var(--tan-dim);
+    font: 400 .68rem var(--font-mono);
+    letter-spacing: .1em
+}
+
+.landing-trash-toggle {
+    cursor: pointer
+}
+
+.landing-trash-caret {
+    margin-left: auto;
+    color: var(--tan-dim);
+    transition: transform .15s ease
+}
+
+.landing-trash-toggle[aria-expanded="true"] .landing-trash-caret {
+    transform: rotate(180deg)
+}
+
+.landing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px
+}
+
+/* Recent and Demos scroll horizontally: one row, fixed-width cards. */
+.landing-grid-rail {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(260px, 300px);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    padding-bottom: 8px;
+    scrollbar-color: var(--tan-dim) transparent
+}
+
+.landing-grid-rail > * {
+    scroll-snap-align: start
+}
+
+.landing-grid-rail::-webkit-scrollbar {
+    height: 8px
+}
+
+.landing-grid-rail::-webkit-scrollbar-thumb {
+    background: var(--hairline);
+    border-radius: 4px
+}
+
+.landing-grid-rail::-webkit-scrollbar-thumb:hover {
+    background: var(--tan-dim)
+}
+
+/* Rail collapses to a single wide row when it only contains the empty state,
+   so "No projects yet…" doesn't sit awkwardly in a 300px slot. */
+.landing-grid-rail:has(> .landing-empty) {
+    grid-auto-flow: row;
+    grid-auto-columns: initial;
+    grid-template-columns: 1fr;
+    overflow-x: hidden
+}
+
+.landing-empty {
+    grid-column: 1 / -1;
+    padding: 32px;
+    border: 1px dashed var(--hairline);
+    color: var(--tan-dim);
+    font: 400 .8rem var(--font-body);
+    text-align: center
+}
+
+.landing-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    padding: 20px;
+    min-height: 130px;
+    transition: border-color .15s ease, transform .15s ease
+}
+
+.landing-card:hover {
+    border-color: rgba(209, 161, 90, .45)
+}
+
+.landing-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    flex: 1
+}
+
+.landing-card-name {
+    font: 500 1.05rem var(--font-display);
+    letter-spacing: -.01em;
+    color: var(--ivory);
+    line-height: 1.25
+}
+
+.landing-card-meta {
+    color: var(--tan-dim);
+    font: 400 .72rem var(--font-mono);
+    letter-spacing: .04em
+}
+
+.landing-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    position: relative
+}
+
+.landing-card-primary {
+    padding: 6px 12px;
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--tan);
+    font: 500 .65rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease
+}
+
+.landing-card-primary:hover {
+    color: var(--anchor);
+    border-color: rgba(209, 161, 90, .55)
+}
+
+.landing-card-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .12s ease, border-color .12s ease, background .12s ease
+}
+
+.landing-card-icon svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
+.landing-card-icon:hover {
+    color: var(--anchor);
+    border-color: rgba(209, 161, 90, .55)
+}
+
+.landing-card-icon.danger:hover {
+    color: var(--danger);
+    border-color: rgba(200, 123, 103, .55);
+    background: rgba(200, 123, 103, .08)
+}
+
+.landing-card-actions > .landing-card-icon:first-of-type {
+    margin-left: auto
+}
+
+.landing-card-demo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    font: inherit
+}
+
+.landing-card-demo:focus-visible {
+    outline: 2px solid var(--anchor);
+    outline-offset: 2px
+}
+
+.landing-card-badge {
+    align-self: flex-start;
+    padding: 3px 9px;
+    background: rgba(209, 161, 90, .12);
+    color: var(--anchor);
+    font: 500 .55rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .15em
+}
+
+.landing-card-trashed {
+    opacity: .78
+}
+
+.landing-footer {
+    padding: 22px 0 0;
+    color: var(--tan-dim);
+    font: 400 .72rem var(--font-mono);
+    letter-spacing: .04em
+}
+
+.landing-footer p {
+    margin: 0
+}
+
+@media (max-width: 700px) {
+    .landing-header {
+        padding: 20px 24px
+    }
+
+    .landing-hero {
+        padding: 40px 24px 32px
+    }
+
+    .landing-scroll {
+        padding: 0 24px 60px
+    }
+}

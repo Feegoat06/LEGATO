@@ -53,7 +53,8 @@
     text-decoration: none
 }
 
-.brand-block p {
+.brand-block p,
+.brand-subtitle {
     margin: 2px 0 0;
     color: var(--tan-dim);
     font: 400 .61rem var(--font-mono);
@@ -61,11 +62,44 @@
     letter-spacing: .14em
 }
 
-.build-tag {
+.brand-home {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-align: left
+}
+
+.brand-home:hover .brand {
+    color: var(--anchor)
+}
+
+.brand-copy {
+    display: flex;
+    flex-direction: column
+}
+
+.view-all-projects {
     margin-left: auto;
+    padding: 6px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
     color: var(--tan-dim);
-    font: 400 .6rem var(--font-mono);
-    letter-spacing: .14em
+    font: 500 .6rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    cursor: pointer;
+    transition: color .12s ease, border-color .12s ease
+}
+
+.view-all-projects:hover {
+    color: var(--anchor);
+    border-color: rgba(209, 161, 90, .55)
 }
 
 .icon-button {
@@ -113,6 +147,36 @@
 .intro-block h1 em {
     font-weight: 500;
     color: var(--anchor)
+}
+
+.project-title-block {
+    padding: 28px 32px 22px;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.project-title-block .kicker {
+    margin-bottom: 10px
+}
+
+.project-name-input {
+    width: 100%;
+    padding: 4px 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    color: var(--ivory);
+    font: 500 clamp(1.4rem, 2vw, 1.9rem) var(--font-display);
+    letter-spacing: -.01em;
+    outline: none;
+    transition: border-color .15s ease
+}
+
+.project-name-input:hover {
+    border-bottom-color: var(--hairline)
+}
+
+.project-name-input:focus {
+    border-bottom-color: var(--anchor)
 }
 
 .intro-copy,

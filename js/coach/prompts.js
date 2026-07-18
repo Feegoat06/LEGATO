@@ -43,8 +43,8 @@ Observed transition data:
 - deterministic evidence: ${ JSON.stringify(evidence) }
 
 Return valid JSON with exactly four string fields:
-- whatYouHear: 1–2 sentences describing the likely perceived effect; distinguish interpretation from fact.
-- whyItWorks: 2–4 sentences explaining only supported harmonic, melodic, rhythmic, or voice-leading facts.
+- whatYouHear: 1-2 sentences describing the likely perceived effect; distinguish interpretation from fact.
+- whyItWorks: 2-4 sentences explaining only supported harmonic, melodic, rhythmic, or voice-leading facts.
 - tryThis: one actionable listening or playing experiment.
 - reflect: one concise question asking the learner to compare, predict, or evaluate the transition.
 
