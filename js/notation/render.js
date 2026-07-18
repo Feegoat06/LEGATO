@@ -56,8 +56,8 @@ export function renderNotation(container, segments, settings) {
   renderer.resize(width, rows * rowHeight + 20);
   const context = renderer.getContext();
   const clef = resolvedClef(segments, settings.clef);
-  const staffColor = '#7a664b';
-  const lineColor = '#4b3d2d';
+  const staffColor = '#927a58';
+  const lineColor = '#69563f';
   const userColor = '#e6ceaa';
   const techniqueColor = '#d1a15a';
   const notesBySource = [];

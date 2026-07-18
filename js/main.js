@@ -276,21 +276,25 @@ $('#tempo').oninput = (event) => { progression.settings.tempo = Number(event.tar
 $('#time-signature').onchange = (event) => { const [num, den] = event.target.value.split('/').map(Number); progression.settings.timeSig = { num, den }; clearCoach(); rerender(); };
 $('#key-signature').onchange = (event) => { progression.settings.key = Number(event.target.value); applyKeyToMaterial(); clearCoach(); rerender(); };
 $('#clef').onchange = (event) => { progression.settings.clef = event.target.value; rerender(); };
+let resizeFrame = 0;
+function scheduleScoreRender() {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(renderScore);
+}
 function setScoreZoom(nextZoom) {
   scoreZoom = Math.max(0.7, Math.min(1.5, Math.round(nextZoom * 10) / 10));
-  $('#score-layer').style.zoom = String(scoreZoom);
+  const layer = $('#score-layer');
+  layer.style.width = `${ 100 / scoreZoom }%`;
+  layer.style.zoom = String(scoreZoom);
   $('#score-zoom-value').textContent = `${ Math.round(scoreZoom * 100) }% · scroll score to zoom`;
+  scheduleScoreRender();
 }
 $('.notation-stage').addEventListener('wheel', (event) => {
   if (event.deltaY === 0) return;
   event.preventDefault();
   setScoreZoom(scoreZoom + (event.deltaY < 0 ? 0.1 : -0.1));
 }, { passive: false });
-let resizeFrame = 0;
-window.addEventListener('resize', () => {
-  cancelAnimationFrame(resizeFrame);
-  resizeFrame = requestAnimationFrame(renderScore);
-});
+window.addEventListener('resize', scheduleScoreRender);
 applyKeyToMaterial();
 rerender();
 setScoreZoom(scoreZoom);

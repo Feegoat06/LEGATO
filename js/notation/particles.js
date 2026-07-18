@@ -88,10 +88,12 @@ uniform vec2  uPointer;
 attribute float aSeed;
 attribute float aOrder;
 attribute float aMeasure;
+attribute float aCoverage;
 attribute vec3  aCol;
 
 varying float vAlpha;
 varying float vBright;
+varying float vCoverage;
 varying vec3  vCol;
 
 void main() {
@@ -108,10 +110,10 @@ void main() {
   // turn the small ellipses into broad travelling waves without deforming
   // the glyph silhouettes enough to hurt legibility.
   float nT       = uTime * 0.19;
-  float phase    = uTime * 0.72 + pos.x * 0.014 + aMeasure * 0.82 + s1 * 0.74;
+  float phase    = uTime * 0.72 + pos.x * 0.014 + aMeasure * 0.82 + s1 * 0.12;
   float wave     = sin(uTime * 0.34 + pos.x * 0.0105 + pos.y * 0.022 + aMeasure * 0.56);
   float shimmer  = 0.5 + 0.5 * sin(phase * 0.74 + wave * 0.65);
-  float orbitAmp = 0.82 + s2 * 0.46 + uBass * 0.24;
+  float orbitAmp = 0.92 + s2 * 0.18 + uBass * 0.22;
   vec2 center    = vec2(uCanvasW * 0.5, uCanvasH * 0.5);
   float camScale = 1.0 + sin(uTime * 0.43) * 0.0017 * uMotionStrength;
   vec2 camDrift  = center + (pos.xy - center) * camScale - pos.xy;
@@ -155,7 +157,8 @@ void main() {
   // ── Point size ───────────────────────────────────────────────────
   float isFrontier = step(abs(dist), 0.026);
   float isActive   = step(abs(dist), 0.062);
-  float sz         = (1.02 + s3 * 0.76 + uBass * 0.34) * uPixelRatio;
+  float coverage   = smoothstep(0.12, 0.92, aCoverage);
+  float sz         = (1.34 + s3 * 0.86 + uBass * 0.32) * uPixelRatio;
   sz *= (1.0 + isFrontier * 0.62 + isActive * 0.22 + hover * 0.32
         + shimmer * 0.08 * uMotionStrength) * uBloomMult;
   gl_PointSize = sz;
@@ -163,13 +166,15 @@ void main() {
   // ── Alpha ────────────────────────────────────────────────────────
   float idleA     = 0.73 + s1 * 0.18 + shimmer * 0.08 * uMotionStrength;
   float playbackA = 0.18 + assembled * 0.68 + isActive * 0.18;
-  vAlpha = min(1.0, mix(idleA, playbackA, step(0.01, uScatterT)) + hover * 0.20);
+  vAlpha = min(1.0, (mix(idleA, playbackA, step(0.01, uScatterT)) + hover * 0.20)
+           * (0.78 + coverage * 0.22));
 
   // ── Brightness ──────────────────────────────────────────────────
   vBright = 0.88 + isFrontier * 0.30 + isActive * 0.18
           + uBass * 0.16 + uEnergy * 0.08 + hover * 0.82
           + shimmer * 0.14 * uMotionStrength;
 
+  vCoverage = coverage;
   vCol = aCol;
 }
 `;
@@ -177,14 +182,42 @@ void main() {
 const FRAG = /* glsl */`
 precision highp float;
 uniform sampler2D uDotTex;
-uniform float     uBloomAlpha;
+uniform float     uColorBoost;
 varying float vAlpha;
 varying float vBright;
+varying float vCoverage;
 varying vec3  vCol;
 void main() {
   vec4 t = texture2D(uDotTex, gl_PointCoord);
-  if (t.a < 0.012) discard;
-  gl_FragColor = vec4(vCol * vBright, t.a * vAlpha * uBloomAlpha);
+  if (t.a < 0.018) discard;
+  vec3 col = max(vCol * vBright, vec3(0.0));
+  col = pow(col, vec3(1.0 / max(1.0, uColorBoost)));
+  float lum = dot(col, vec3(0.299, 0.587, 0.114));
+  float floorLum = mix(0.31, 0.36, vCoverage);
+  col *= max(1.0, floorLum / max(0.001, lum));
+  col = clamp(col, vec3(0.0), vec3(1.45));
+  float core = smoothstep(0.06, 0.28, t.a);
+  gl_FragColor = vec4(col, core * vAlpha);
+}
+`;
+
+const BLOOM_FRAG = /* glsl */`
+precision highp float;
+uniform sampler2D uDotTex;
+uniform float     uBloomAlpha;
+uniform float     uColorBoost;
+varying float vAlpha;
+varying float vBright;
+varying float vCoverage;
+varying vec3  vCol;
+void main() {
+  vec4 t = texture2D(uDotTex, gl_PointCoord);
+  if (t.a < 0.01) discard;
+  float soft = t.a * t.a;
+  vec3 col = max(vCol * (0.72 + vBright * 0.48), vec3(0.0));
+  col = pow(col, vec3(1.0 / max(1.0, uColorBoost)));
+  col = clamp(col + vec3(0.10, 0.065, 0.025), vec3(0.0), vec3(1.65));
+  gl_FragColor = vec4(col, soft * vAlpha * uBloomAlpha * (0.76 + vCoverage * 0.24));
 }
 `;
 
@@ -234,10 +267,10 @@ export function createScoreParticles(canvas) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
   renderer.setClearColor(0x000000, 0);
   renderer.sortObjects = false;
-  // Avoid double gamma correction – particle colours come from sRGB image data
-  // and are passed as-is; output in linear so the browser compositor handles sRGB.
-  if (T.LinearSRGBColorSpace !== undefined) {
-    renderer.outputColorSpace = T.LinearSRGBColorSpace;
+  // The sampled SVG pixels are sRGB. Match the reference visual system and
+  // keep the renderer in sRGB output instead of writing them as linear values.
+  if (T.SRGBColorSpace !== undefined) {
+    renderer.outputColorSpace = T.SRGBColorSpace;
   }
 
   const scene = new T.Scene();
@@ -258,23 +291,23 @@ export function createScoreParticles(canvas) {
   const uPointerActive  = { value: 0 };
   const uPointerRadius  = { value: compact ? 82 : 112 };
   const uPointer        = { value: new T.Vector2(-10000, -10000) };
+  const uColorBoost     = { value: 1.28 };
 
   // Main pass (normal blending, tight point size)
   const mainUniforms = {
     uTime, uBass, uEnergy, uProgress, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
-    uMotionStrength, uPointerActive, uPointerRadius, uPointer,
+    uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
     uBloomMult:  { value: 1.0 },
-    uBloomAlpha: { value: 1.0 },
   };
 
   // Bloom pass (additive blending, enlarged points for soft halo)
   const bloomUniforms = {
     uTime, uBass, uEnergy, uProgress, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
-    uMotionStrength, uPointerActive, uPointerRadius, uPointer,
-    uBloomMult:  { value: 2.15 },
-    uBloomAlpha: { value: 0.16 },
+    uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
+    uBloomMult:  { value: 2.65 },
+    uBloomAlpha: { value: 0.26 },
   };
 
   const matBase = {
@@ -285,8 +318,8 @@ export function createScoreParticles(canvas) {
     depthWrite: false,
   };
 
-  const mat      = new T.ShaderMaterial({ ...matBase, uniforms: mainUniforms,  blending: T.NormalBlending });
-  const bloomMat = new T.ShaderMaterial({ ...matBase, uniforms: bloomUniforms, blending: T.AdditiveBlending });
+  const mat      = new T.ShaderMaterial({ ...matBase, uniforms: mainUniforms, blending: T.NormalBlending });
+  const bloomMat = new T.ShaderMaterial({ ...matBase, fragmentShader: BLOOM_FRAG, uniforms: bloomUniforms, blending: T.AdditiveBlending });
 
   let geo = null, pts = null, bPts = null;
 
@@ -371,6 +404,7 @@ export function createScoreParticles(canvas) {
     const sa = new Float32Array(n);
     const oa = new Float32Array(n);
     const ma = new Float32Array(n);
+    const qa = new Float32Array(n);
     const ca = new Float32Array(n * 3);
 
     list.forEach((p, i) => {
@@ -380,6 +414,7 @@ export function createScoreParticles(canvas) {
       sa[i]     = p.seed;
       oa[i]     = p.order;
       ma[i]     = p.measure;
+      qa[i]     = p.coverage ?? 1;
       ca[i * 3]     = p.color[0] / 255;
       ca[i * 3 + 1] = p.color[1] / 255;
       ca[i * 3 + 2] = p.color[2] / 255;
@@ -391,6 +426,7 @@ export function createScoreParticles(canvas) {
     geo.setAttribute('aSeed',    new T.BufferAttribute(sa, 1));
     geo.setAttribute('aOrder',   new T.BufferAttribute(oa, 1));
     geo.setAttribute('aMeasure', new T.BufferAttribute(ma, 1));
+    geo.setAttribute('aCoverage', new T.BufferAttribute(qa, 1));
     geo.setAttribute('aCol',     new T.BufferAttribute(ca, 3));
 
     if (pts)  { scene.remove(pts);  pts.geometry.dispose(); }
@@ -399,6 +435,10 @@ export function createScoreParticles(canvas) {
     // Bloom renders first (behind), main pass on top
     bPts = new T.Points(geo, bloomMat);
     pts  = new T.Points(geo, mat);
+    bPts.frustumCulled = false;
+    pts.frustumCulled = false;
+    bPts.renderOrder = 0;
+    pts.renderOrder = 1;
     scene.add(bPts);
     scene.add(pts);
   }
@@ -418,6 +458,7 @@ export function createScoreParticles(canvas) {
             color: GOLD, seed,
             order:   (m.index + lp) / Math.max(1, layout.length),
             measure: m.index,
+            coverage: 1,
           });
         }
       }
@@ -425,7 +466,7 @@ export function createScoreParticles(canvas) {
     buildGeo(list);
   }
 
-  function samplePx(imgData, w, h, sp) {
+  function samplePx(imgData, w, h, sp, scale = 1) {
     const px = imgData.data;
     const list = [];
     for (let cy = 0; cy < h; cy += sp) {
@@ -439,8 +480,10 @@ export function createScoreParticles(canvas) {
         }
         if (bestOff < 0) continue;
         const pi = bestOff / 4;
-        const x  = pi % w;
-        const y  = Math.floor(pi / w);
+        const rasterX = pi % w;
+        const rasterY = Math.floor(pi / w);
+        const x = rasterX / scale;
+        const y = rasterY / scale;
         const m  = nearestM(x, y);
         if (!m) continue;
         const lp   = clamp((x - m.x) / m.width);
@@ -452,6 +495,7 @@ export function createScoreParticles(canvas) {
           seed,
           order:   (m.index + lp) / Math.max(1, layout.length),
           measure: m.index,
+          coverage: bestA / 255,
         });
       }
     }
@@ -470,13 +514,21 @@ export function createScoreParticles(canvas) {
     try {
       await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; });
       if (gen !== sampleGen) return false;
-      const rc  = Object.assign(document.createElement('canvas'), { width: w, height: h });
+      const sampleScale = compact ? 1.35 : 2;
+      const rasterW = Math.max(1, Math.round(w * sampleScale));
+      const rasterH = Math.max(1, Math.round(h * sampleScale));
+      const rc  = Object.assign(document.createElement('canvas'), { width: rasterW, height: rasterH });
       const rctx = rc.getContext('2d', { willReadFrequently: true });
-      rctx.drawImage(img, 0, 0, w, h);
-      const data = rctx.getImageData(0, 0, w, h);
+      rctx.imageSmoothingEnabled = true;
+      rctx.imageSmoothingQuality = 'high';
+      rctx.drawImage(img, 0, 0, rasterW, rasterH);
+      const data = rctx.getImageData(0, 0, rasterW, rasterH);
       let sp = sampleStep;
-      let list = samplePx(data, w, h, sp);
-      while (list.length > particleCap && sp < 8) { sp++; list = samplePx(data, w, h, sp); }
+      let list = samplePx(data, rasterW, rasterH, sp, sampleScale);
+      while (list.length > particleCap && sp < 10) {
+        sp++;
+        list = samplePx(data, rasterW, rasterH, sp, sampleScale);
+      }
       if (gen !== sampleGen || !list.length) return false;
       buildGeo(list.slice(0, particleCap));
       stage?.classList.add('has-full-particles');
