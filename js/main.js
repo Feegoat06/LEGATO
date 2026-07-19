@@ -18,7 +18,6 @@ import { createProjectStore } from './persistence.js';
 import { createRouter, makeEditorResumePolicy, parseEditorHash, LANDING_HASH } from './router.js';
 import { createLandingView } from './views/landing-view.js';
 import { createEditorView } from './views/editor-view.js';
-import { makeDefaultProgression } from './data/demo-projects.js';
 
 const appRoot = document.querySelector('#app-root');
 const pianoDialog = mountPianoModal({
@@ -34,7 +33,6 @@ const editorView = createEditorView({
   store,
   pianoDialog,
   projectSettingsDialog,
-  exampleProgressionFactory: makeDefaultProgression,
 });
 
 const router = createRouter({

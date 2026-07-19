@@ -164,13 +164,20 @@ export function newId(prefix = 'c') {
 // FACTORIES — always build state through these so the shape stays consistent
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Global tempo bounds. Every UI that lets the user edit tempo — project
+ *  settings modal, sheet-music-panel overrides — must clamp to this range so
+ *  no path can create a progression the validator would reject. */
+export const TEMPO_MIN = 1;
+export const TEMPO_MAX = 500;
+export const TEMPO_DEFAULT = 100;
+
 /** @returns {Settings} */
 export function makeSettings(overrides = {}) {
     const timeSig = overrides.timeSig
         ? { ...overrides.timeSig }
         : { num: 4, den: 4 };
     return {
-        tempo: 100,
+        tempo: TEMPO_DEFAULT,
         timeSig,
         key: 0,
         clef: 'auto',
@@ -264,7 +271,7 @@ export function validateProgression(raw) {
 
         const s = raw.settings ?? {};
         const settings = makeSettings({
-            tempo: Number.isFinite(s.tempo) && s.tempo >= 1 && s.tempo <= 500 ? s.tempo : 100,
+            tempo: Number.isFinite(s.tempo) && s.tempo >= TEMPO_MIN && s.tempo <= TEMPO_MAX ? s.tempo : TEMPO_DEFAULT,
             timeSig: (s.timeSig && Number.isInteger(s.timeSig.num) && s.timeSig.num > 0
                 && Number.isInteger(s.timeSig.den) && [2, 4, 8, 16].includes(s.timeSig.den))
                 ? { num: s.timeSig.num, den: s.timeSig.den } : { num: 4, den: 4 },

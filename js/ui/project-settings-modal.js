@@ -17,6 +17,7 @@
  * already supports the full range.
  */
 import { installBackdropDismissal } from './dialog.js';
+import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT } from '../state.js';
 
 // 12 clock positions around the dial, going clockwise from 12 o'clock. Each
 // wedge stores its canonical circle-of-fifths integer. The enharmonic zones
@@ -67,6 +68,8 @@ const KEY_LABELS = {
 
 const TIME_SIG_OPTIONS = ['3/4', '4/4', '5/4', '7/4', '6/8'];
 
+const TEMPO_INPUT_ATTRS = `min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" inputmode="numeric"`;
+
 const DIAL_SIZE = 260;
 const DIAL_CENTER = DIAL_SIZE / 2;
 const DIAL_OUTER_RADIUS = 122;
@@ -92,7 +95,7 @@ const DIALOG_TEMPLATE = `
       <div class="settings-grid">
         <label><span>Tempo</span>
           <div class="tempo-input-row">
-            <input id="project-settings-tempo" type="number" min="1" max="500" step="1" inputmode="numeric" />
+            <input id="project-settings-tempo" type="number" ${ TEMPO_INPUT_ATTRS } />
             <small>BPM</small>
           </div>
         </label>
@@ -339,7 +342,7 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
     const cleanName = (nameInput.value || '').trim() || 'Untitled project';
     const [num, den] = meterSelect.value.split('/').map(Number);
     const parsedTempo = Number(tempoInput.value);
-    const tempo = Number.isFinite(parsedTempo) ? Math.min(500, Math.max(1, Math.round(parsedTempo))) : 100;
+    const tempo = Number.isFinite(parsedTempo) ? Math.min(TEMPO_MAX, Math.max(TEMPO_MIN, Math.round(parsedTempo))) : TEMPO_DEFAULT;
     onSubmit({
       name: cleanName,
       settings: {

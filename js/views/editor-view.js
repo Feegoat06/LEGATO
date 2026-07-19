@@ -18,7 +18,7 @@ import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } fr
 import { chordDisplayName } from '../engine/chords.js';
 import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
-import { playSegments, stopPlayback } from '../audio/playback.js';
+import { playSegments, stopPlayback, pausePlayback, resumePlayback } from '../audio/playback.js';
 import { openPianoModal, populateChordControls } from '../ui/piano-modal.js';
 import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
@@ -39,9 +39,9 @@ const SHELL_TEMPLATE = `
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
 /**
- * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, exampleProgressionFactory: () => import('../state.js').Progression }} deps
+ * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, projectSettingsDialog: any }} deps
  */
-export function createEditorView({ store, pianoDialog, projectSettingsDialog, exampleProgressionFactory }) {
+export function createEditorView({ store, pianoDialog, projectSettingsDialog }) {
   return {
     async mount(root, params) {
       const project = await store.getProject(params.id);
@@ -65,6 +65,14 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
 
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
+        callbacks: {
+          onEffectiveSettingsChange() {
+            // Tempo/clef overrides don't touch progression state, but they do
+            // affect what Play should schedule. Nothing else to do here — the
+            // panel and audio scheduler both re-read effective settings on
+            // demand.
+          },
+        },
       });
 
       const editor = mountEditorPanel({
@@ -128,9 +136,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
       const transport = mountTransport({
         container: sheetMusic.transportMount,
         callbacks: {
-          onPlay: handlePlay,
+          onPlayToggle: handlePlayToggle,
           onStop: handleStop,
-          onReset: handleLoadExample,
         },
       });
 
@@ -270,21 +277,53 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
       }
 
       // ── Transport ───────────────────────────────────────────────────
-      async function handlePlay() {
+      /** @type {'idle' | 'playing' | 'paused'} */
+      let playbackState = 'idle';
+
+      function setPlaybackState(next) {
+        playbackState = next;
+        if (next === 'playing') transport.setPlayMode('pause');
+        else if (next === 'paused') transport.setPlayMode('resume');
+        else transport.setPlayMode('play');
+      }
+
+      function handlePlayToggle() {
+        if (playbackState === 'playing') {
+          pausePlayback();
+          setPlaybackState('paused');
+          transport.setPulseActive(false);
+          transport.setStatus('Paused');
+          sheetMusic.particles.settle({ preserveProgress: true });
+        } else if (playbackState === 'paused') {
+          resumePlayback();
+          setPlaybackState('playing');
+          transport.setPulseActive(true);
+          transport.setStatus('Playing');
+          sheetMusic.particles.beginPlayback();
+        } else {
+          startPlaybackFromStart();
+        }
+      }
+
+      async function startPlaybackFromStart() {
         transport.setPlayEnabled(false);
         transport.setPulseActive(true);
         transport.setStatus('Loading piano…');
         sheetMusic.particles.beginPlayback();
+        const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
+          setPlaybackState('playing');
+          transport.setPlayEnabled(true);
           await playSegments(
             segments,
-            progression.settings,
+            playbackSettings,
             (measure) => {
               sheetMusic.setActiveMeasure(measure);
               if (measure !== null) transport.setStatus(`Playing measure ${ measure + 1 }`);
             },
             () => {
               sheetMusic.particles.settle();
+              setPlaybackState('idle');
               transport.setPlayEnabled(true);
               transport.setPulseActive(false);
               transport.setStatus('Playback complete');
@@ -293,6 +332,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
           );
         } catch (error) {
           sheetMusic.particles.settle({ immediate: true });
+          setPlaybackState('idle');
           transport.setPlayEnabled(true);
           transport.setPulseActive(false);
           transport.setStatus(error.message);
@@ -301,19 +341,14 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
 
       function handleStop() {
         stopPlayback();
-        sheetMusic.particles.settle({ preserveProgress: true });
+        // Full reset: no progress rail, no lingering "paused" glow — Stop
+        // should look identical to the just-loaded state.
+        sheetMusic.particles.settle({ immediate: true });
         sheetMusic.setActiveMeasure(null);
+        setPlaybackState('idle');
         transport.setPlayEnabled(true);
         transport.setPulseActive(false);
         transport.setStatus('Stopped');
-      }
-
-      function handleLoadExample() {
-        progression = exampleProgressionFactory();
-        selectedSeam = 0;
-        coach.setEmpty();
-        transport.setStatus('Example loaded');
-        rerender();
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
@@ -321,6 +356,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog, ex
         stopPlayback();
         sheetMusic.particles.settle({ immediate: true });
         sheetMusic.setActiveMeasure(null);
+        setPlaybackState('idle');
         transport.setPlayEnabled(true);
         transport.setPulseActive(false);
         segments = compile(progression);
