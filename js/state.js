@@ -29,6 +29,7 @@ import { compileProgression } from './engine/compile.js';
  * @typedef {Object} Settings
  * @property {number}  tempo     BPM. PLAYER-ONLY — compile() ignores it.
  * @property {TimeSig} timeSig   Structural. measureLength (quarter-beats) = num * 4 / den.
+ * @property {'simple'|'compound'} meterType  Immutable project-creation choice, derived from timeSig.
  * @property {number}  key       Key signature on the circle of fifths, -7..+7. Sharps +, flats −.
  *                               Notation-only: drives enharmonic spelling and printed accidentals.
  *                               Never mutates chord.notes. Transposition is a separate feature.
@@ -141,6 +142,16 @@ export function isCompoundMeter(timeSig) {
     return timeSig.den === 8 && timeSig.num % 3 === 0 && timeSig.num >= 6;
 }
 
+/** UI duration choices expressed in the meter's counted beats. Compound
+ * meters count dotted-quarter beats, so half and dotted counted beats are
+ * deliberately excluded there. */
+export const SIMPLE_BEAT_CHOICES = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
+export const COMPOUND_BEAT_CHOICES = [1, 2, 3, 4, 6, 8];
+
+export function beatChoicesForMeter(timeSig) {
+    return isCompoundMeter(timeSig) ? COMPOUND_BEAT_CHOICES : SIMPLE_BEAT_CHOICES;
+}
+
 /** Length of one user-facing beat in quarter-beats. Dotted-quarter (1.5) if compound, else 4/den. */
 export function beatValue(timeSig) {
     return isCompoundMeter(timeSig) ? 1.5 : 4 / timeSig.den;
@@ -176,13 +187,16 @@ export function makeSettings(overrides = {}) {
     const timeSig = overrides.timeSig
         ? { ...overrides.timeSig }
         : { num: 4, den: 4 };
+    const meterType = isCompoundMeter(timeSig) ? 'compound' : 'simple';
     return {
         tempo: TEMPO_DEFAULT,
         timeSig,
+        meterType,
         key: 0,
         clef: 'auto',
         ...overrides,
         timeSig,
+        meterType,
     };
 }
 
@@ -204,11 +218,13 @@ export function makeChord(notes, bars = 1, hint) {
  * @returns {Progression}
  */
 export function makeProgression(overrides = {}) {
+    const settings = makeSettings(overrides.settings ?? {});
     const progression = {
-        settings: makeSettings(),
+        settings,
         chords: [],
         seams: [],
         ...overrides,
+        settings,
     };
     return {
         ...progression,

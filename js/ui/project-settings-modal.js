@@ -17,7 +17,7 @@
  * already supports the full range.
  */
 import { installBackdropDismissal } from './dialog.js';
-import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT } from '../state.js';
+import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT, isCompoundMeter } from '../state.js';
 
 // 12 clock positions around the dial, going clockwise from 12 o'clock. Each
 // wedge stores its canonical circle-of-fifths integer. The enharmonic zones
@@ -66,7 +66,10 @@ const KEY_LABELS = {
   '7': 'C♯ major / A♯ minor · 7 sharps',
 };
 
-const TIME_SIG_OPTIONS = ['3/4', '4/4', '5/4', '7/4', '6/8'];
+const METER_OPTIONS = {
+  simple: ['3/4', '4/4', '5/4', '7/4'],
+  compound: ['6/8', '9/8', '12/8'],
+};
 
 const TEMPO_INPUT_ATTRS = `min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" inputmode="numeric"`;
 
@@ -99,7 +102,13 @@ const DIALOG_TEMPLATE = `
             <small>BPM</small>
           </div>
         </label>
-        <label><span>Meter</span>
+        <label id="project-settings-meter-type-field"><span>Meter type</span>
+          <select id="project-settings-meter-type">
+            <option value="simple">Simple</option>
+            <option value="compound">Compound</option>
+          </select>
+        </label>
+        <label id="project-settings-meter-field"><span>Time signature</span>
           <select id="project-settings-meter"></select>
         </label>
         <label><span>Clef</span>
@@ -125,7 +134,7 @@ const DIALOG_TEMPLATE = `
       </fieldset>
     </div>
     <footer class="dialog-footer">
-      <p id="project-settings-hint">Everything here can be changed later from the project title.</p>
+      <p id="project-settings-hint">Tempo, key signature, and clef can be changed later. Meter is locked after creation.</p>
       <button id="project-settings-submit" class="save-button" type="button">Create <span>→</span></button>
     </footer>
   </form>
@@ -143,8 +152,12 @@ export function mountProjectSettingsModal({ container }) {
 }
 
 function populateStaticOptions(dialog) {
-  const meterSelect = dialog.querySelector('#project-settings-meter');
-  TIME_SIG_OPTIONS.forEach((label) => meterSelect.add(new Option(label, label)));
+  syncMeterOptions(dialog.querySelector('#project-settings-meter'), 'simple', '4/4');
+}
+
+function syncMeterOptions(select, meterType, selected) {
+  select.replaceChildren();
+  METER_OPTIONS[meterType].forEach((label) => select.add(new Option(label, label, false, label === selected)));
 }
 
 function polar(angleRad, radius) {
@@ -262,6 +275,9 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
   const lede = dialog.querySelector('#project-settings-lede');
   const nameInput = dialog.querySelector('#project-settings-name-input');
   const tempoInput = dialog.querySelector('#project-settings-tempo');
+  const meterTypeField = dialog.querySelector('#project-settings-meter-type-field');
+  const meterField = dialog.querySelector('#project-settings-meter-field');
+  const meterTypeSelect = dialog.querySelector('#project-settings-meter-type');
   const meterSelect = dialog.querySelector('#project-settings-meter');
   const clefSelect = dialog.querySelector('#project-settings-clef');
   const cancelBtn = dialog.querySelector('#project-settings-cancel');
@@ -276,17 +292,24 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
   kicker.textContent = isCreate ? 'New project' : 'Edit project';
   title.textContent = isCreate ? 'Create new project' : 'Edit project settings';
   lede.textContent = isCreate
-    ? "Name your project and choose the score settings you'd like to start with."
-    : 'Update the name or score settings for this project.';
+    ? "Name your project and choose the score settings you'd like to start with. Meter is locked after creation."
+    : 'Update the name, tempo, time signature, key signature, or clef for this project.';
   submitBtn.innerHTML = isCreate ? 'Create <span>→</span>' : 'Save <span>→</span>';
   hint.textContent = isCreate
-    ? 'Everything here can be changed later from the project title.'
-    : 'Changes apply immediately; cancel to discard.';
+    ? 'Meter is fixed when the project is created. Tempo, key signature, and clef can be changed later.'
+    : 'The meter family is locked, but you can choose another time signature within it. Changes apply immediately; cancel to discard.';
 
   nameInput.value = initial.name ?? '';
   tempoInput.value = String(initial.settings.tempo);
-  meterSelect.value = `${ initial.settings.timeSig.num }/${ initial.settings.timeSig.den }`;
+  const initialMeter = `${ initial.settings.timeSig.num }/${ initial.settings.timeSig.den }`;
+  const initialMeterType = initial.settings.meterType ?? (isCompoundMeter(initial.settings.timeSig) ? 'compound' : 'simple');
+  meterTypeSelect.value = initialMeterType;
+  syncMeterOptions(meterSelect, initialMeterType, initialMeter);
+  meterTypeField.hidden = !isCreate;
+  meterField.hidden = false;
   clefSelect.value = initial.settings.clef;
+
+  meterTypeSelect.onchange = () => syncMeterOptions(meterSelect, meterTypeSelect.value, METER_OPTIONS[meterTypeSelect.value][0]);
 
   let currentKey = initial.settings.key;
   syncKeyUI();
@@ -348,6 +371,7 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
       settings: {
         tempo,
         timeSig: { num, den },
+        meterType: isCreate ? meterTypeSelect.value : initialMeterType,
         key: currentKey,
         clef: clefSelect.value,
       },

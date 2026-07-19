@@ -197,6 +197,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         progression.settings = {
           tempo: settings.tempo,
           timeSig: { ...settings.timeSig },
+          meterType: settings.meterType ?? previous.meterType,
           key: settings.key,
           clef: settings.clef,
         };

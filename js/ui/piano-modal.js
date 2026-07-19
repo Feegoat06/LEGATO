@@ -23,7 +23,7 @@
  */
 import { QUALITIES, inferChordIdentity, noteName, notesFrom, vexKeyForNote, chordToneName } from '../engine/chords.js';
 import { playNote, playChord } from '../audio/playback.js';
-import { beatsToBars, barsToBeats } from '../state.js';
+import { beatChoicesForMeter, beatsToBars, barsToBeats } from '../state.js';
 import { pitchClassOf, octaveOf, spellPitchClass } from '../util/midi.js';
 import { accidentalFor } from '../engine/key-signature.js';
 import { installBackdropDismissal } from './dialog.js';
@@ -96,16 +96,11 @@ const QUALITY_LABELS = {
   Major: 'Major', Minor: 'Minor', Dom7: 'Dom 7', Maj7: 'Maj 7', Min7: 'Min 7',
   Dim: 'Dim', Dim7: 'Dim 7', m7b5: 'm7b5', Sus2: 'Sus2', Sus4: 'Sus4', Aug: 'Aug',
 };
-const BEAT_OPTIONS = [
-  { beats: 0.5, label: '½ beat' },
-  { beats: 1, label: '1 beat' },
-  { beats: 1.5, label: '1½ beats' },
-  { beats: 2, label: '2 beats' },
-  { beats: 3, label: '3 beats' },
-  { beats: 4, label: '4 beats' },
-  { beats: 6, label: '6 beats' },
-  { beats: 8, label: '8 beats' },
-];
+const beatLabel = (beats) => {
+  if (beats === 0.5) return '½ beat';
+  if (beats === 1.5) return '1½ beats';
+  return `${ beats } beat${ beats === 1 ? '' : 's' }`;
+};
 
 /** Detect a chord identity from raw selected notes, biased toward the bass. */
 function detect(notes) {
@@ -164,7 +159,7 @@ function renderPreview(container, notes, key, identity) {
 function fillBeatOptions(select, timeSig, currentBars) {
   select.replaceChildren();
   const currentBeats = currentBars != null ? Number(barsToBeats(currentBars, timeSig).toFixed(4)) : null;
-  const options = [...BEAT_OPTIONS];
+  const options = beatChoicesForMeter(timeSig).map((beats) => ({ beats, label: beatLabel(beats) }));
   const known = options.some((opt) => opt.beats === currentBeats);
   if (currentBeats != null && !known) {
     options.push({ beats: currentBeats, label: `${ currentBeats } beats` });

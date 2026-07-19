@@ -8,7 +8,7 @@
  * key, clef) are now edited through the shared project-settings-modal opened
  * by the pencil button — they no longer have inline controls here.
  */
-import { availableBeats, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable } from '../state.js';
+import { availableBeats, beatChoicesForMeter, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable } from '../state.js';
 import { chordDisplayName, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { escapeHtml } from '../util/html.js';
@@ -71,7 +71,7 @@ export function mountEditorPanel({ container, callbacks }) {
 
   function makeChordRow(progression, chord, index) {
     const timeSig = progression.settings.timeSig;
-    const beatChoices = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
+    const beatChoices = beatChoicesForMeter(timeSig);
     const beatLabel = (beats) => beats === 0.5 ? '½' : beats === 1.5 ? '1½' : String(beats);
     const row = document.createElement('article');
     row.className = 'chord-row';

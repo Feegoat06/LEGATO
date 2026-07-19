@@ -241,7 +241,7 @@ function byUpdatedDesc(a, b) {
 
 function emptyProgression() {
   return {
-    settings: { tempo: 100, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' },
+    settings: { tempo: 100, timeSig: { num: 4, den: 4 }, meterType: 'simple', key: 0, clef: 'auto' },
     chords: [],
     seams: [],
   };
