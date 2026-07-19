@@ -24,7 +24,8 @@ import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
 import { mountTransport } from '../ui/transport.js';
-import { mountCoachPanel } from '../ui/coach-panel.js';
+import { mountTutorChat } from '../ui/tutor-chat.js';
+import { lastMeasureForSource, lastMeasureForSeam } from '../ui/tenutino.js';
 import { buildCoachEvidence } from '../coach/evidence.js';
 import { requestCoach } from '../coach/coach.js';
 import { navigate, LANDING_HASH } from '../router.js';
@@ -58,6 +59,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let segments = [];
       let editingId = null;
       let selectedSeam = 0;
+      let latestTenutinoContext = null;
 
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
@@ -71,6 +73,15 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             // affect what Play should schedule. Nothing else to do here — the
             // panel and audio scheduler both re-read effective settings on
             // demand.
+          },
+          onTenutinoExplain() {
+            openTenutinoMode('explain');
+          },
+          onTenutinoSuggest() {
+            openTenutinoMode('suggest');
+          },
+          onTenutinoAsk() {
+            openTenutinoMode('ask');
           },
         },
       });
@@ -112,13 +123,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           onSelectSeam(index) {
             selectedSeam = index;
             editor.render({ progression, selectedSeam, projectName: currentName });
-            coach.setContext(coachContextText());
+            tutorChat.setContext(coachContextText());
           },
           onSetSeamTechnique(index, techniqueId) {
             progression.seams[index] = techniqueId;
             selectedSeam = index;
-            coach.setEmpty();
-            rerender();
+            rerender({ type: 'seam', index });
           },
           onExplainSeam(index) { explainSeam(index); },
           onGoHome() {
@@ -141,10 +151,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         },
       });
 
-      const coach = mountCoachPanel({
-        container: sheetMusic.coachMount,
+      const tutorChat = mountTutorChat({
+        container: sheetMusic.tutorChatMount,
+        storageKey: `legato:tutor-chat:${ params.id }`,
         callbacks: {
-          onRetry(retryIndex) { explainSeam(retryIndex); },
+          onRetry(retry) { explainSeam(retry.index, retry); },
+          onSubmit({ message, mode }) { askTutor(message, mode); },
         },
       });
 
@@ -205,8 +217,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         // a separate future feature. Time signature can invalidate technique
         // seam beat-costs, so those still get re-checked here.
         if (timeSigChanged) resetIneligibleSeams();
-        if (keyChanged || timeSigChanged || clefChanged) coach.setEmpty();
-
         if (keyChanged || timeSigChanged || clefChanged || nameChanged) {
           rerender();
         } else {
@@ -226,20 +236,22 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       }
 
       function saveChord(input) {
+        let changedChordId;
         if (editingId) {
           const chord = progression.chords.find((item) => item.id === editingId);
           const { hint: _oldHint, ...withoutHint } = chord;
           Object.assign(chord, withoutHint, input);
           if (!input.hint) delete chord.hint;
+          changedChordId = chord.id;
         } else {
           const chord = makeChord(input.notes, input.bars, input.hint);
           progression.chords.push(chord);
           if (progression.chords.length > 1) progression.seams.push(null);
+          changedChordId = chord.id;
         }
         resetIneligibleSeams();
         editingId = null;
-        coach.setEmpty();
-        rerender();
+        rerender({ type: 'chord', chordId: changedChordId });
       }
 
       // ── Coach flow ──────────────────────────────────────────────────
@@ -251,10 +263,27 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         return `${ from } → ${ to } · ${ technique }`;
       }
 
-      async function explainSeam(index) {
+      let tutorRequestController = null;
+
+      function tenutinoSeamIndex() {
+        if (!progression.seams.length) return -1;
+        if (latestTenutinoContext?.type === 'seam') return latestTenutinoContext.index;
+        if (latestTenutinoContext?.type === 'chord') {
+          const chordIndex = progression.chords.findIndex((chord) => chord.id === latestTenutinoContext.chordId);
+          return chordIndex < progression.seams.length ? chordIndex : chordIndex - 1;
+        }
+        return Math.min(selectedSeam, progression.seams.length - 1);
+      }
+
+      async function explainSeam(index, { mode = 'explain', question = '' } = {}) {
+        if (index < 0 || index >= progression.seams.length) {
+          tutorChat.open(mode, { context: coachContextText(), focusComposer: mode === 'ask' });
+          tutorChat.appendAssistant('Add one more chord and I can look at the connection with you.');
+          return;
+        }
         selectedSeam = index;
         editor.render({ progression, selectedSeam, projectName: currentName });
-        coach.setContext(coachContextText());
+        tutorChat.open(mode, { context: coachContextText() });
         const techniqueId = progression.seams[index];
         const payload = {
           fromChord: { name: chordDisplayName(progression.chords[index], progression.settings.key), notes: progression.chords[index].notes },
@@ -262,18 +291,57 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           technique: techniqueId ? { id: techniqueId, ...TECHNIQUES[techniqueId] } : 'none',
           generatedNotes: segments.filter((segment) => segment.seamIndex === index).flatMap((segment) => segment.notes),
           evidence: buildCoachEvidence(progression, segments, index),
+          mode,
+          question,
+          history: tutorChat.getHistory().slice(-10),
         };
-        coach.setLoading();
+        tutorRequestController?.abort();
+        const controller = new AbortController();
+        tutorRequestController = controller;
+        tutorChat.setLoading();
+        const timer = setTimeout(() => controller.abort(), 20000);
         try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 20000);
           const result = await requestCoach(payload, { signal: controller.signal });
-          clearTimeout(timer);
-          coach.setResult(result);
+          if (tutorRequestController === controller) tutorChat.setResult(result);
         } catch (error) {
+          if (tutorRequestController !== controller) return;
           const message = error.name === 'AbortError' ? 'The coach took too long to respond.' : error.message;
-          coach.setError(message, index);
+          tutorChat.setError(message, { index, mode, question });
+        } finally {
+          clearTimeout(timer);
+          if (tutorRequestController === controller) tutorRequestController = null;
         }
+      }
+
+      function openTenutinoMode(mode) {
+        const index = tenutinoSeamIndex();
+        if (mode === 'ask') {
+          if (tutorRequestController) {
+            const pending = tutorRequestController;
+            tutorRequestController = null;
+            pending.abort();
+          }
+          tutorChat.clearTransient();
+        }
+        tutorChat.open(mode, { context: coachContextText(), focusComposer: mode === 'ask' });
+        if (mode !== 'ask') explainSeam(index, { mode });
+      }
+
+      function askTutor(question, mode) {
+        explainSeam(tenutinoSeamIndex(), { mode, question });
+      }
+
+      function focusTenutino(edit) {
+        if (!edit) return;
+        let measureIndex = 0;
+        if (edit.type === 'chord') {
+          measureIndex = lastMeasureForSource(segments, edit.chordId, 0);
+        } else if (edit.type === 'seam') {
+          const departingId = progression.chords[edit.index]?.id;
+          measureIndex = lastMeasureForSeam(segments, edit.index, departingId, 0);
+        }
+        latestTenutinoContext = { ...edit, measureIndex };
+        sheetMusic.tenutino.focusMeasure(measureIndex, { encourage: true });
       }
 
       // ── Transport ───────────────────────────────────────────────────
@@ -291,12 +359,16 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         if (playbackState === 'playing') {
           pausePlayback();
           setPlaybackState('paused');
+          sheetMusic.tenutino.setPlaying(false);
+          tutorChat.setPlaybackActive(false);
           transport.setPulseActive(false);
           transport.setStatus('Paused');
           sheetMusic.particles.settle({ preserveProgress: true });
         } else if (playbackState === 'paused') {
           resumePlayback();
           setPlaybackState('playing');
+          sheetMusic.tenutino.setPlaying(true, sheetMusic.getEffectiveSettings()?.tempo);
+          tutorChat.setPlaybackActive(true);
           transport.setPulseActive(true);
           transport.setStatus('Playing');
           sheetMusic.particles.beginPlayback();
@@ -313,6 +385,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
           setPlaybackState('playing');
+          sheetMusic.tenutino.setPlaying(true, playbackSettings.tempo);
+          tutorChat.setPlaybackActive(true);
           transport.setPlayEnabled(true);
           await playSegments(
             segments,
@@ -323,15 +397,26 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             },
             () => {
               sheetMusic.particles.settle();
+              sheetMusic.tenutino.setPlaying(false);
+              sheetMusic.tenutino.setPlaybackMeasure(null);
+              sheetMusic.tenutino.returnToLatestEdit();
+              tutorChat.setPlaybackActive(false);
               setPlaybackState('idle');
               transport.setPlayEnabled(true);
               transport.setPulseActive(false);
               transport.setStatus('Playback complete');
             },
-            (progress, measure) => sheetMusic.particles.setProgress(progress, measure),
+            (progress, measure) => {
+              sheetMusic.particles.setProgress(progress, measure);
+              sheetMusic.tenutino.setPlaybackProgress(progress, measure);
+            },
           );
         } catch (error) {
           sheetMusic.particles.settle({ immediate: true });
+          sheetMusic.tenutino.setPlaying(false);
+          sheetMusic.tenutino.setPlaybackMeasure(null);
+          sheetMusic.tenutino.returnToLatestEdit();
+          tutorChat.setPlaybackActive(false);
           setPlaybackState('idle');
           transport.setPlayEnabled(true);
           transport.setPulseActive(false);
@@ -344,6 +429,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         // Full reset: no progress rail, no lingering "paused" glow — Stop
         // should look identical to the just-loaded state.
         sheetMusic.particles.settle({ immediate: true });
+        sheetMusic.tenutino.setPlaying(false);
+        sheetMusic.tenutino.setPlaybackMeasure(null);
+        sheetMusic.tenutino.returnToLatestEdit();
+        tutorChat.setPlaybackActive(false);
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
@@ -352,9 +441,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
-      function rerender() {
+      function rerender(tenutinoEdit = null) {
         stopPlayback();
         sheetMusic.particles.settle({ immediate: true });
+        sheetMusic.tenutino.setPlaying(false);
+        sheetMusic.tenutino.setPlaybackMeasure(null);
+        tutorChat.setPlaybackActive(false);
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
@@ -362,7 +454,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         segments = compile(progression);
         editor.render({ progression, selectedSeam, projectName: currentName });
         sheetMusic.render(segments, progression.settings, progression.chords);
-        coach.setContext(coachContextText());
+        focusTenutino(tenutinoEdit);
+        tutorChat.setContext(coachContextText());
         scheduleAutosave();
       }
 
@@ -372,6 +465,9 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         async unmount() {
           window.removeEventListener('beforeunload', beforeUnload);
           stopPlayback();
+          tutorRequestController?.abort();
+          sheetMusic.tenutino.destroy();
+          tutorChat.destroy();
           await flushSave();
           root.replaceChildren();
         },

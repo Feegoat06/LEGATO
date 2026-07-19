@@ -1,0 +1,196 @@
+/* Tenutino is a DOM overlay, not part of the WebGL particle canvas. Keeping
+   the companion separate makes it crisp, draggable, and keyboard reachable. */
+
+.tenutino-root {
+    --tenutino-travel-ms: 760ms;
+    --tenutino-beat-ms: 600ms;
+    position: absolute;
+    z-index: 8;
+    width: 32px;
+    height: 32px;
+    pointer-events: auto;
+    transition:
+        left var(--tenutino-travel-ms) cubic-bezier(.22, .75, .2, 1),
+        top var(--tenutino-travel-ms) cubic-bezier(.22, .75, .2, 1);
+    will-change: left, top
+}
+
+.tenutino-root[hidden] {
+    display: none
+}
+
+.tenutino-root.is-teleporting,
+.tenutino-root.is-dragging {
+    transition: none
+}
+
+.tenutino-root.is-following-playback {
+    transition:
+        left 90ms linear,
+        top 260ms cubic-bezier(.22, .75, .2, 1)
+}
+
+.tenutino-character {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .52));
+    transform-origin: 50% 90%
+}
+
+.tenutino-character:active,
+.tenutino-root.is-dragging .tenutino-character {
+    cursor: grabbing
+}
+
+.tenutino-character:focus-visible {
+    outline: 1px solid var(--anchor);
+    outline-offset: 4px
+}
+
+.tenutino-character img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    user-select: none;
+    pointer-events: none
+}
+
+.tenutino-notification {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    border: 1px solid #0d0a08;
+    border-radius: 50%;
+    background: var(--anchor);
+    box-shadow: 0 0 0 3px rgba(209, 161, 90, .16), 0 0 9px rgba(209, 161, 90, .8);
+    animation: tenutino-notification 1.8s ease-in-out infinite
+}
+
+.tenutino-notification[hidden] {
+    display: none
+}
+
+.tenutino-menu {
+    position: absolute;
+    left: calc(100% + 9px);
+    top: 50%;
+    display: grid;
+    width: max-content;
+    min-width: 142px;
+    padding: 5px;
+    border: 1px solid rgba(209, 161, 90, .28);
+    background: rgba(13, 10, 8, .96);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .44);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-5px, -50%);
+    transition: opacity .16s, transform .2s
+}
+
+.tenutino-root:hover .tenutino-menu,
+.tenutino-root:focus-within .tenutino-menu,
+.tenutino-root.is-menu-locked .tenutino-menu {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(0, -50%)
+}
+
+.tenutino-root.is-following-playback .tenutino-menu {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-5px, -50%)
+}
+
+.tenutino-menu button {
+    padding: 8px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--tan);
+    font: 500 .58rem/1.15 var(--font-mono);
+    letter-spacing: .04em;
+    text-align: left;
+    cursor: pointer
+}
+
+.tenutino-menu button:hover,
+.tenutino-menu button:focus-visible {
+    outline: none;
+    background: rgba(209, 161, 90, .11);
+    color: var(--ivory)
+}
+
+.tenutino-menu .tenutino-return {
+    margin-top: 4px;
+    border-top: 1px solid var(--hairline);
+    color: var(--anchor)
+}
+
+.tenutino-menu .tenutino-return[hidden] {
+    display: none
+}
+
+.tenutino-encouragement {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    width: max-content;
+    max-width: 190px;
+    padding: 7px 9px;
+    border: 1px solid rgba(209, 161, 90, .22);
+    background: rgba(13, 10, 8, .94);
+    color: var(--ivory);
+    font: italic .66rem/1.35 var(--font-display);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 4px);
+    transition: opacity .2s, transform .25s
+}
+
+.tenutino-root.is-speaking .tenutino-encouragement {
+    opacity: 1;
+    transform: translate(-50%, 0)
+}
+
+.tenutino-root.is-dancing .tenutino-character {
+    animation: tenutino-dance var(--tenutino-beat-ms) ease-in-out infinite
+}
+
+.tenutino-root.is-auto-scrolling .tenutino-character {
+    animation: tenutino-wait .8s ease-in-out infinite alternate
+}
+
+@keyframes tenutino-notification {
+    50% { box-shadow: 0 0 0 5px rgba(209, 161, 90, 0), 0 0 12px rgba(209, 161, 90, .9) }
+}
+
+@keyframes tenutino-dance {
+    0%, 100% { transform: translateY(0) rotate(-2deg) scaleY(1) }
+    45% { transform: translateY(-4px) rotate(2deg) scaleY(1.04) }
+    65% { transform: translateY(0) rotate(1deg) scaleY(.96) }
+}
+
+@keyframes tenutino-wait {
+    to { transform: translateY(-2px) }
+}
+
+@media(prefers-reduced-motion:reduce) {
+    .tenutino-root,
+    .tenutino-character,
+    .tenutino-notification {
+        transition: none;
+        animation: none !important
+    }
+}

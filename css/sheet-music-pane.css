@@ -1,8 +1,8 @@
 /* Right-side sheet music surface: page header (title only), particle stage
    with corner zoom control, VexFlow SVG layer, progress rail, and a shared
    transport row that hosts play/stop plus temporary tempo/clef overrides on
-   the right. Owns everything inside <main class="sheet-music-pane"> except
-   the coach panel. */
+   the right. Owns the persistent sheet surface; the Tutor opens as a fixed
+   side drawer above it. */
 
 .sheet-music-pane {
     min-width: 0;

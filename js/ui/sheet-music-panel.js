@@ -8,12 +8,12 @@
  * externally (via project settings), the override is cleared so the panel
  * reflects the new source of truth.
  *
- * The transport and coach panels are siblings inside <main class="sheet-
- * music-pane"> — this module mounts them via the exposed `transportMount` /
- * `coachMount` refs so editor-view can wire them separately.
+ * The transport and Tutor drawer are siblings inside <main class="sheet-
+ * music-pane">; this module exposes their mount points for editor-view.
  */
 import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
+import { mountTenutino } from './tenutino.js';
 import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
 
 const ZOOM_MIN = 0.7;
@@ -68,7 +68,7 @@ const TEMPLATE = `
     </label>
   </div>
 </div>
-<div id="coach-mount"></div>
+<div id="tutor-chat-mount"></div>
 `;
 
 export function mountSheetMusicPanel({ container, callbacks = {} }) {
@@ -83,6 +83,15 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
+  const tenutino = mountTenutino({
+    container: layerEl,
+    scrollContainer: notationStageEl,
+    callbacks: {
+      explain: (context) => callbacks.onTenutinoExplain?.(context),
+      suggest: (context) => callbacks.onTenutinoSuggest?.(context),
+      ask: (context) => callbacks.onTenutinoAsk?.(context),
+    },
+  });
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
   const tempoInputEl = container.querySelector('#sheet-music-tempo-input');
   const clefSelectEl = container.querySelector('#sheet-music-clef');
@@ -116,6 +125,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     if (!effectiveSettings) return { measureCount: 0, layout: [] };
     const result = renderNotation(sheetMusicEl, currentSegments, effectiveSettings, currentChords);
     particles.setSheetMusic(sheetMusicEl.querySelector('svg'), result.layout);
+    tenutino.setLayout(result.layout);
     applyActiveMeasureClasses();
     return result;
   }
@@ -137,6 +147,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     layerEl.style.width = `${ 100 / zoom }%`;
     layerEl.style.zoom = String(zoom);
     zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
+    tenutino.setZoom(zoom);
     zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
     zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
     scheduleRerender();
@@ -201,8 +212,9 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
 
   return {
     transportMount: container.querySelector('#transport-mount'),
-    coachMount: container.querySelector('#coach-mount'),
+    tutorChatMount: container.querySelector('#tutor-chat-mount'),
     particles,
+    tenutino,
     render(segments, settings, chords = []) {
       currentSegments = segments;
       currentChords = chords;
