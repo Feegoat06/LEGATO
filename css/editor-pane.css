@@ -555,11 +555,6 @@
     gap: 4px
 }
 
-.transition-editor-copy strong {
-    color: var(--ivory);
-    font: 500 var(--fs-eyebrow) var(--font-body)
-}
-
 .transition-editor-copy small {
     color: var(--tan-dim);
     font: 400 var(--fs-label) var(--font-body)

@@ -1,46 +1,24 @@
-/* Playback controls under the sheet music: play/pause toggle, stop, status
-   pulse. The outer border/padding lives on `.transport-row` in
+/* Playback controls under the sheet music: play/pause toggle and stop. The
+   outer border/padding lives on `.transport-row` in
    sheet-music-pane.css because that row also hosts the tempo/clef overrides
    on the right. */
 
 .transport {
     display: flex;
-    align-items: center;
-    gap: 22px
+    align-items: center
 }
 
 .transport-buttons {
-    display: flex
+    display: flex;
+    gap: 10px
 }
 
 .transport button {
-    height: 52px;
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-pill);
-    font: 600 .78rem var(--font-body);
-    letter-spacing: 0;
     cursor: pointer
 }
 
 .play-button {
-    background: var(--accent);
-    color: var(--ink);
-    border-color: transparent;
-    min-width: 188px;
-    padding: 0 20px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    text-align: left;
-    box-shadow: inset 0 1px rgba(255, 255, 255, .19), 0 10px 28px rgba(0, 0, 0, .2);
-    transition: transform .18s, box-shadow .18s, filter .18s
-}
-
-.play-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    filter: brightness(1.06);
-    box-shadow: inset 0 1px rgba(255, 255, 255, .22), 0 14px 34px rgba(0, 0, 0, .28)
+    min-width: 132px
 }
 
 .play-button:disabled {
@@ -59,34 +37,28 @@
 }
 
 .play-button .play-copy {
-    display: grid;
-    gap: 3px;
     margin: 0
 }
 
-.play-button .play-copy strong,
-.play-button .play-copy small {
+.play-button .play-copy strong {
     display: block;
     font: inherit;
     line-height: 1
 }
 
-.play-button .play-copy small {
-    font-size: .55rem;
-    font-weight: 500;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    opacity: .68
-}
-
 .stop-button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 22px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
     background: transparent;
     color: var(--tan-dim);
-    padding: 0 18px;
-    margin-left: 10px
+    font: 600 .82rem var(--font-body);
+    letter-spacing: 0;
+    transition: color .15s ease, border-color .15s ease
 }
 
 .stop-button .ui-icon {
@@ -96,42 +68,5 @@
 
 .stop-button:hover:not(:disabled) {
     color: var(--ivory);
-    border-color: var(--accent-border)
-}
-
-.transport-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--tan-dim);
-    font: 500 var(--fs-copy) var(--font-body)
-}
-
-#playback-pulse {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--tan-dim)
-}
-
-#playback-pulse.active {
-    background: var(--accent);
-    box-shadow: 0 0 12px var(--accent);
-    animation: pulse 1s infinite
-}
-
-@media(prefers-reduced-motion:reduce) {
-    #playback-pulse.active {
-        animation: none
-    }
-}
-
-@media(max-width:650px) {
-    .transport {
-        flex-wrap: wrap
-    }
-
-    .play-button {
-        min-width: 176px
-    }
+    border-color: color-mix(in srgb, var(--ivory) 28%, transparent)
 }

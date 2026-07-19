@@ -195,7 +195,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             progression,
           });
         } catch (error) {
-          transport.setStatus(error.message);
+          console.error(error);
         } finally {
           saveInFlight = false;
         }
@@ -326,14 +326,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         if (playbackState === 'playing') {
           pausePlayback();
           setPlaybackState('paused');
-          transport.setPulseActive(false);
-          transport.setStatus('Paused');
           sheetMusic.particles.settle({ preserveProgress: true });
         } else if (playbackState === 'paused') {
           resumePlayback();
           setPlaybackState('playing');
-          transport.setPulseActive(true);
-          transport.setStatus('Playing');
           sheetMusic.particles.beginPlayback();
         } else {
           startPlaybackFromStart();
@@ -342,8 +338,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
 
       async function startPlaybackFromStart() {
         transport.setPlayEnabled(false);
-        transport.setPulseActive(true);
-        transport.setStatus('Loading piano…');
         sheetMusic.particles.beginPlayback();
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
@@ -354,14 +348,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             playbackSettings,
             (measure) => {
               sheetMusic.setActiveMeasure(measure);
-              if (measure !== null) transport.setStatus(`Playing measure ${ measure + 1 }`);
             },
             () => {
               sheetMusic.particles.settle();
               setPlaybackState('idle');
               transport.setPlayEnabled(true);
-              transport.setPulseActive(false);
-              transport.setStatus('Playback complete');
             },
             (progress, measure) => sheetMusic.particles.setProgress(progress, measure),
           );
@@ -369,8 +360,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           sheetMusic.particles.settle({ immediate: true });
           setPlaybackState('idle');
           transport.setPlayEnabled(true);
-          transport.setPulseActive(false);
-          transport.setStatus(error.message);
+          console.error(error);
         }
       }
 
@@ -382,8 +372,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
-        transport.setStatus('Stopped');
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
@@ -393,7 +381,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
         segments = compile(progression);
         editor.render({ progression, selectedSeam, projectName: currentName });
         sheetMusic.render(segments, progression.settings, progression.chords);
