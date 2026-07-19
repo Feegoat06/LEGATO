@@ -18,11 +18,12 @@
     border-bottom: 1px solid var(--hairline)
 }
 
-.coach-heading h2 {
-    font: 600 1.5rem var(--font-body);
-    letter-spacing: -.005em;
-    color: var(--ivory);
-    margin: 7px 0 0
+.coach-topic {
+    margin: 8px 0 0;
+    color: var(--tan-dim);
+    font: 500 .72rem var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase
 }
 
 .coach-heading>p {

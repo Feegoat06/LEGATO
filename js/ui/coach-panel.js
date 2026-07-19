@@ -11,8 +11,8 @@ const TEMPLATE = `
 <section class="coach-panel" aria-labelledby="coach-title">
   <div class="coach-heading">
     <div>
-      <p class="kicker">04 · AI tutor</p>
-      <h2 id="coach-title">Understand the transition</h2>
+      <h2 id="coach-title" class="workspace-section-title">AI Tutor</h2>
+      <p class="coach-topic">Understand the transition</p>
     </div>
     <p id="coach-context">Select a seam, then ask LEGATO to explain the exact notes you hear.</p>
   </div>

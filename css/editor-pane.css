@@ -241,9 +241,9 @@
     margin-bottom: 14px
 }
 
-.section-title h2 {
-    font: 600 1rem var(--font-body);
-    letter-spacing: -.005em;
+.workspace-section-title {
+    font: 700 clamp(1.5rem, 2vw, 1.75rem)/1 var(--font-body);
+    letter-spacing: -.015em;
     color: var(--ivory);
     margin: 0
 }

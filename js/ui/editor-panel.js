@@ -50,7 +50,7 @@ const TEMPLATE = `
 
   <section class="editor-section" aria-labelledby="chords-title">
     <div class="section-title">
-      <h2 id="chords-title">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
+      <h2 id="chords-title" class="workspace-section-title">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
     </div>
     <div id="progression-list" class="progression-list"></div>
   </section>
@@ -101,12 +101,14 @@ export function mountEditorPanel({ container, callbacks }) {
     return row;
   }
 
-  function renderChordGlyph({ root, baseline, superscript, plain }) {
+  function renderChordGlyph({ root, baseline, marker, suffix, superscript, plain }) {
     if (!root) return escapeHtml(plain);
     const rootHtml = escapeHtml(root);
     const baselineHtml = baseline ? escapeHtml(baseline) : '';
+    const markerHtml = marker ? `<sup class="chord-quality-marker">${ escapeHtml(marker) }</sup>` : '';
+    const suffixHtml = suffix ? `<sup class="chord-quality-suffix">${ escapeHtml(suffix) }</sup>` : '';
     const supHtml = superscript ? `<sup>${ escapeHtml(superscript) }</sup>` : '';
-    return `${ rootHtml }${ baselineHtml }${ supHtml }`;
+    return `${ rootHtml }${ baselineHtml }${ markerHtml }${ suffixHtml }${ supHtml }`;
   }
 
   function formatBeatDisplay(beats) {

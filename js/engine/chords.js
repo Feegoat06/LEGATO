@@ -121,17 +121,19 @@ export function chordDisplayName(chord, key = 0) {
 /**
  * Idiomatic lead-sheet chord symbol split into a rendering-ready shape.
  * Callers decide how to draw the parts — the editor renders baseline text
- * followed by a <sup> for the superscript so the extension sits above the
- * baseline the way engravers write it (Cmaj⁷, Cm⁷, C°⁷, Cø⁷, Csus⁴, C⁺).
+ * followed by either a <sup> for a normal extension or a separately styled
+ * quality marker (Cmaj⁷, Cm⁷, CO7, CØ7, Csus⁴, C+).
  *
  * Convention (per the design revamp):
  *   - Root letter + accidental      → baseline
  *   - Minor 'm'                     → baseline (right after root)
  *   - 'sus' modifier                → baseline
- *   - Numeric extensions (7/9/…)    → superscript
+ *   - Numeric extensions (7/9/…)    → superscript, except after O or Ø
  *   - 'maj' modifier on maj7        → superscript with the number
- *   - Symbols °, ø, +               → superscript (° for diminished,
- *                                     ø for half-diminished, + for aug)
+ *   - Symbols O, Ø, +               → superscript quality marker
+ *                                     (O for diminished, Ø for half-diminished,
+ *                                     + for augmented)
+ *   - Dim7/m7b5's 7                 → superscript suffix after its marker
  *
  * When the chord has no display hint AND its notes don't resolve to a
  * recognized quality, `root` is empty and `plain` carries the note-list
@@ -139,7 +141,7 @@ export function chordDisplayName(chord, key = 0) {
  *
  * @param {import('../state.js').Chord} chord
  * @param {number} [key]  Circle-of-fifths integer for accidental spelling.
- * @returns {{ root: string, baseline: string, superscript: string, plain: string }}
+ * @returns {{ root: string, baseline: string, marker: string, suffix: string, superscript: string, plain: string }}
  */
 export function formatChordSymbol(chord, key = 0) {
   const identity = chord.hint
@@ -147,25 +149,37 @@ export function formatChordSymbol(chord, key = 0) {
     : detectForDisplay(chord, key);
 
   if (!identity) {
-    return { root: '', baseline: '', superscript: '', plain: chordDisplayName(chord, key) };
+    return { root: '', baseline: '', marker: '', suffix: '', superscript: '', plain: chordDisplayName(chord, key) };
   }
-  const spec = QUALITY_SYMBOL[identity.quality] ?? { baseline: ` ${ identity.quality }`, superscript: '' };
-  return { root: identity.root, baseline: spec.baseline, superscript: spec.superscript, plain: chordDisplayName(chord, key) };
+  const spec = QUALITY_SYMBOL[identity.quality] ?? {
+    baseline: ` ${ identity.quality }`, marker: '', suffix: '', superscript: '',
+  };
+  return {
+    root: identity.root,
+    baseline: spec.baseline,
+    marker: spec.marker,
+    suffix: spec.suffix,
+    superscript: spec.superscript,
+    plain: chordDisplayName(chord, key),
+  };
 }
 
-/** Baseline/superscript split for every quality in QUALITIES. */
+/** Baseline/quality-marker/superscript split for every quality in QUALITIES.
+ *
+ * The quality marker and its seventh are independently superscripted, so
+ * their spacing can match compact lead-sheet notation (CO7 and CØ7). */
 const QUALITY_SYMBOL = Object.freeze({
-  Major: { baseline: '',    superscript: '' },
-  Minor: { baseline: 'm',   superscript: '' },
-  Dom7:  { baseline: '',    superscript: '7' },
-  Maj7:  { baseline: '',    superscript: 'maj7' },
-  Min7:  { baseline: 'm',   superscript: '7' },
-  Dim:   { baseline: '',    superscript: '°' },
-  Dim7:  { baseline: '',    superscript: '°7' },
-  m7b5:  { baseline: '',    superscript: 'ø7' },
-  Sus2:  { baseline: 'sus', superscript: '2' },
-  Sus4:  { baseline: 'sus', superscript: '4' },
-  Aug:   { baseline: '',    superscript: '+' },
+  Major: { baseline: '',    marker: '',  suffix: '',  superscript: '' },
+  Minor: { baseline: 'm',   marker: '',  suffix: '',  superscript: '' },
+  Dom7:  { baseline: '',    marker: '',  suffix: '',  superscript: '7' },
+  Maj7:  { baseline: '',    marker: '',  suffix: '',  superscript: 'maj7' },
+  Min7:  { baseline: 'm',   marker: '',  suffix: '',  superscript: '7' },
+  Dim:   { baseline: '',    marker: 'O', suffix: '',  superscript: '' },
+  Dim7:  { baseline: '',    marker: 'O', suffix: '7', superscript: '' },
+  m7b5:  { baseline: '',    marker: 'Ø', suffix: '7', superscript: '' },
+  Sus2:  { baseline: 'sus', marker: '',  suffix: '',  superscript: '2' },
+  Sus4:  { baseline: 'sus', marker: '',  suffix: '',  superscript: '4' },
+  Aug:   { baseline: '',    marker: '+', suffix: '',  superscript: '' },
 });
 
 function detectForDisplay(chord, key) {

@@ -30,10 +30,7 @@
 }
 
 .sheet-music-title {
-    margin: 0;
-    font: 600 1.25rem var(--font-body);
-    letter-spacing: -.005em;
-    color: var(--ivory)
+    flex-shrink: 0
 }
 
 /* Transport row: play/stop + status on the left, tempo/clef overrides pinned

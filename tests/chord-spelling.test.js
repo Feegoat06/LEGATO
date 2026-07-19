@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chordAwareVexKey, vexKeyForNote, chordSpellingIdentity, chordToneName } from '../js/engine/chords.js';
+import { chordAwareVexKey, vexKeyForNote, chordSpellingIdentity, chordToneName, formatChordSymbol } from '../js/engine/chords.js';
 
 test('G♯ major spells its third as B♯, not C', () => {
   // G# = MIDI 68, B# = MIDI 72 (enharmonic to C5), D# = MIDI 75.
@@ -60,4 +60,20 @@ test('chordSpellingIdentity returns null when notes do not form a recognised cho
 test('chordToneName renders a proper B♯ for MIDI 72 inside G♯ major', () => {
   const identity = { rootPc: 8, quality: 'Major' };
   assert.equal(chordToneName(72, identity, 0), 'B♯4');
+});
+
+test('lead-sheet quality letterforms precede a superscript diminished extension', () => {
+  const chordFor = (quality, notes) => ({ notes, hint: { rootMidi: 60, quality } });
+  assert.deepEqual(formatChordSymbol(chordFor('Dim', [60, 63, 66])), {
+    root: 'C', baseline: '', marker: 'O', suffix: '', superscript: '', plain: 'C Dim',
+  });
+  assert.deepEqual(formatChordSymbol(chordFor('Dim7', [60, 63, 66, 69])), {
+    root: 'C', baseline: '', marker: 'O', suffix: '7', superscript: '', plain: 'C Dim7',
+  });
+  assert.deepEqual(formatChordSymbol(chordFor('m7b5', [60, 63, 66, 70])), {
+    root: 'C', baseline: '', marker: 'Ø', suffix: '7', superscript: '', plain: 'C m7b5',
+  });
+  assert.deepEqual(formatChordSymbol(chordFor('Aug', [60, 64, 68])), {
+    root: 'C', baseline: '', marker: '+', suffix: '', superscript: '', plain: 'C Aug',
+  });
 });

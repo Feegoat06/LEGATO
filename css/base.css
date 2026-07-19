@@ -297,9 +297,9 @@ body {
 /* Chord symbol — the playful spot. Used by every place that renders a chord
    name (editor rows, sheet-music header, empty-state quick chips, piano
    modal header). Font/weight/style all switch via the data-chord-font root
-   attribute above. Extensions (7, maj7, °, ø, +, sus digits) sit in a
-   nested <sup> so they render as idiomatic superscripts without changing
-   the parent's line-height. */
+   attribute above. Normal extensions sit in a nested <sup>; diminished,
+   half-diminished, and augmented quality markers get their own lead-sheet
+   superscript treatment, including a compact following 7 when applicable. */
 .chord-glyph {
     font-family: var(--font-chord);
     font-weight: var(--font-chord-weight);
@@ -317,6 +317,18 @@ body {
     font-weight: inherit;
     font-style: inherit;
     line-height: 1
+}
+
+/* Keep the O / Ø / + quality marker and an optional following 7 visibly
+   raised. The shared <sup> treatment provides the lead-sheet scale and
+   vertical offset; these rules only adjust the internal spacing. */
+.chord-glyph sup.chord-quality-marker {
+    margin-left: .02em;
+    margin-right: -.02em
+}
+
+.chord-glyph sup.chord-quality-suffix {
+    margin-left: -.02em;
 }
 
 /* Segmented pill toggle — Classical / JazzText. Shared by the sheet-music
