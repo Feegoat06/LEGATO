@@ -17,7 +17,8 @@ dialog::backdrop {
 
 .dialog-shell {
     background: var(--panel);
-    border: 1px solid rgba(209, 161, 90, .3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-card);
     box-shadow: 0 30px 120px #000;
     padding: 30px
 }
@@ -31,7 +32,9 @@ dialog::backdrop {
 }
 
 .dialog-header h2 {
-    font: 340 3.5rem/.95 var(--font-display);
+    font: var(--font-chord-weight) 3.2rem/.95 var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--ivory);
     margin: 8px 0
 }
 
@@ -111,13 +114,15 @@ dialog::backdrop {
 }
 
 .piano-key.selected {
-    background: var(--anchor);
+    background: var(--accent);
     color: var(--ink);
     box-shadow: inset 0 -6px rgba(255, 255, 255, .14)
 }
 
 .piano-key.black.selected {
-    background: #b47b35;
+    /* Derive a darker shade of the current accent so any mood color reads
+       correctly against the black-key surrounds without a per-color table. */
+    background: color-mix(in srgb, var(--accent) 75%, black);
     color: #fff
 }
 
@@ -129,7 +134,7 @@ dialog::backdrop {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--anchor);
+    background: var(--accent);
     transform: translateX(-50%)
 }
 
@@ -177,11 +182,17 @@ dialog::backdrop {
 
 .save-button {
     border: 0;
-    background: var(--anchor);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
     color: var(--ink);
-    padding: 12px 18px;
-    font: 600 .65rem var(--font-mono);
-    cursor: pointer
+    padding: 12px 22px;
+    font: 600 .78rem var(--font-body);
+    cursor: pointer;
+    transition: filter .15s ease
+}
+
+.save-button:hover {
+    filter: brightness(1.08)
 }
 
 .save-button span {
@@ -207,14 +218,14 @@ dialog::backdrop {
 }
 
 .quality-chip:hover {
-    border-color: rgba(209, 161, 90, .55);
+    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent);
     color: var(--ivory)
 }
 
 .quality-chip.is-active {
-    border-color: var(--anchor);
-    color: var(--anchor);
-    background: rgba(209, 161, 90, .09)
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 9%, transparent)
 }
 
 .piano-stage {
@@ -262,9 +273,9 @@ dialog::backdrop {
 }
 
 .preview-play {
-    border: 1px solid rgba(209, 161, 90, .45);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
     background: transparent;
-    color: var(--anchor);
+    color: var(--accent);
     width: 22px;
     height: 22px;
     padding: 0;
@@ -276,7 +287,7 @@ dialog::backdrop {
 }
 
 .preview-play:hover:not(:disabled) {
-    background: rgba(209, 161, 90, .12)
+    background: color-mix(in srgb, var(--accent) 12%, transparent)
 }
 
 .preview-play:disabled {
@@ -300,7 +311,7 @@ dialog::backdrop {
 }
 
 .preview-sheet:focus-visible {
-    outline: 1px solid var(--anchor);
+    outline: 1px solid var(--accent);
     outline-offset: 2px
 }
 
@@ -312,7 +323,7 @@ dialog::backdrop {
 
 .preview-empty {
     color: var(--tan-dim);
-    font: italic .75rem var(--font-display)
+    font: italic 500 .8rem var(--font-body)
 }
 
 .octave-controls {
@@ -333,8 +344,8 @@ dialog::backdrop {
 }
 
 .octave-controls button:hover:not(:disabled) {
-    border-color: var(--anchor);
-    color: var(--anchor)
+    border-color: var(--accent);
+    color: var(--accent)
 }
 
 .octave-controls button:disabled {

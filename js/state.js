@@ -26,6 +26,14 @@ import { compileProgression } from './engine/compile.js';
  */
 
 /**
+ * Purely visual per-project preferences. Not read by compile()/audio/render;
+ * only editor-view applies them (CSS custom property + <html> attribute).
+ * @typedef {Object} Theme
+ * @property {string} accent     One of ACCENT_PRESETS' hex values. Drives the CSS --accent variable.
+ * @property {'jazztext'|'classical'} chordFont  Which family renders chord symbols and project titles.
+ */
+
+/**
  * @typedef {Object} Settings
  * @property {number}  tempo     BPM. PLAYER-ONLY — compile() ignores it.
  * @property {TimeSig} timeSig   Structural. measureLength (quarter-beats) = num * 4 / den.
@@ -33,6 +41,7 @@ import { compileProgression } from './engine/compile.js';
  *                               Notation-only: drives enharmonic spelling and printed accidentals.
  *                               Never mutates chord.notes. Transposition is a separate feature.
  * @property {'auto'|'treble'|'bass'} clef  One clef, no grand staff. 'auto' resolved at render time.
+ * @property {Theme}   theme     Visual preferences (accent color, chord-symbol font).
  */
 
 /**
@@ -171,6 +180,32 @@ export const TEMPO_MIN = 1;
 export const TEMPO_MAX = 500;
 export const TEMPO_DEFAULT = 100;
 
+/** Five curated moods, each mapped to an accent hex. UI picker reads this
+ *  ordered list directly; validation checks the theme against the hex set. */
+export const ACCENT_PRESETS = /** @type {const} */ ([
+    { hex: '#E8A94B', name: 'Amber',   mood: 'Warm · classic' },
+    { hex: '#B87FD9', name: 'Plum',    mood: 'Moody · jazz' },
+    { hex: '#4FBBA8', name: 'Teal',    mood: 'Calm · ambient' },
+    { hex: '#E8615B', name: 'Crimson', mood: 'Energetic · rock' },
+    { hex: '#8FBF7A', name: 'Sage',    mood: 'Folk · acoustic' },
+]);
+
+const ACCENT_HEX_SET = new Set(ACCENT_PRESETS.map((p) => p.hex));
+
+export const DEFAULT_ACCENT = ACCENT_PRESETS[0].hex;
+
+export const CHORD_FONTS = /** @type {const} */ (['jazztext', 'classical']);
+const CHORD_FONT_SET = new Set(CHORD_FONTS);
+export const DEFAULT_CHORD_FONT = 'jazztext';
+
+/** @returns {Theme} */
+export function makeTheme(overrides = {}) {
+    return {
+        accent: ACCENT_HEX_SET.has(overrides.accent) ? overrides.accent : DEFAULT_ACCENT,
+        chordFont: CHORD_FONT_SET.has(overrides.chordFont) ? overrides.chordFont : DEFAULT_CHORD_FONT,
+    };
+}
+
 /** @returns {Settings} */
 export function makeSettings(overrides = {}) {
     const timeSig = overrides.timeSig
@@ -183,6 +218,7 @@ export function makeSettings(overrides = {}) {
         clef: 'auto',
         ...overrides,
         timeSig,
+        theme: makeTheme(overrides.theme),
     };
 }
 
@@ -204,11 +240,13 @@ export function makeChord(notes, bars = 1, hint) {
  * @returns {Progression}
  */
 export function makeProgression(overrides = {}) {
+    // makeSettings normalizes any partial input (fills theme + timeSig defaults),
+    // so callers passing a bare {tempo, timeSig, key, clef} still land on a
+    // well-formed Settings shape without every call site having to remember.
     const progression = {
-        settings: makeSettings(),
-        chords: [],
-        seams: [],
-        ...overrides,
+        settings: makeSettings(overrides.settings),
+        chords: overrides.chords ?? [],
+        seams: overrides.seams ?? [],
     };
     return {
         ...progression,
@@ -277,6 +315,9 @@ export function validateProgression(raw) {
                 ? { num: s.timeSig.num, den: s.timeSig.den } : { num: 4, den: 4 },
             key: Number.isInteger(s.key) && s.key >= -7 && s.key <= 7 ? s.key : 0,
             clef: ['auto', 'treble', 'bass'].includes(s.clef) ? s.clef : 'auto',
+            // Missing/invalid theme silently defaults — pre-revamp saved
+            // projects should open on the new look without warnings.
+            theme: s.theme,
         });
 
         if (!Array.isArray(raw.chords)) return { ok: false, warnings, error: 'chords is not an array.' };

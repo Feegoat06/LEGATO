@@ -14,17 +14,20 @@
 }
 
 .transport button {
-    height: 50px;
+    height: 52px;
     border: 1px solid var(--hairline);
-    font: 500 .65rem var(--font-mono);
+    border-radius: var(--radius-pill);
+    font: 600 .78rem var(--font-body);
+    letter-spacing: 0;
     cursor: pointer
 }
 
 .play-button {
-    background: var(--anchor);
+    background: var(--accent);
     color: var(--ink);
+    border-color: transparent;
     min-width: 188px;
-    padding: 0 18px;
+    padding: 0 20px;
     display: inline-flex;
     align-items: center;
     justify-content: flex-start;
@@ -64,18 +67,23 @@
 }
 
 .play-button .play-copy small {
-    font-size: .48rem;
+    font-size: .55rem;
     font-weight: 500;
     letter-spacing: .08em;
     text-transform: uppercase;
-    opacity: .56
+    opacity: .68
 }
 
 .stop-button {
-    background: var(--panel);
-    color: var(--tan);
+    background: transparent;
+    color: var(--tan-dim);
     padding: 0 18px;
-    border-left: 0 !important
+    margin-left: 10px
+}
+
+.stop-button:hover:not(:disabled) {
+    color: var(--ivory);
+    border-color: var(--accent-border)
 }
 
 .transport-status {
@@ -83,7 +91,7 @@
     align-items: center;
     gap: 8px;
     color: var(--tan-dim);
-    font: 400 .62rem var(--font-mono)
+    font: 500 .7rem var(--font-body)
 }
 
 #playback-pulse {
@@ -94,8 +102,8 @@
 }
 
 #playback-pulse.active {
-    background: var(--anchor);
-    box-shadow: 0 0 12px var(--anchor);
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
     animation: pulse 1s infinite
 }
 

@@ -17,7 +17,7 @@
  * already supports the full range.
  */
 import { installBackdropDismissal } from './dialog.js';
-import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT } from '../state.js';
+import { TEMPO_MIN, TEMPO_MAX, TEMPO_DEFAULT, ACCENT_PRESETS, CHORD_FONTS, DEFAULT_ACCENT, DEFAULT_CHORD_FONT, makeTheme } from '../state.js';
 
 // 12 clock positions around the dial, going clockwise from 12 o'clock. Each
 // wedge stores its canonical circle-of-fifths integer. The enharmonic zones
@@ -123,6 +123,18 @@ const DIALOG_TEMPLATE = `
         <div class="key-enharmonics" id="project-settings-key-enharmonics" aria-label="Enharmonic alternatives"></div>
         <p class="field-note">Key signature only changes how the sheet music is spelled; it never alters the actual notes of any chord.</p>
       </fieldset>
+      <fieldset class="theme-fieldset">
+        <legend>Theme</legend>
+        <div class="theme-field">
+          <p class="theme-field-label">Accent</p>
+          <div id="project-settings-accent-picker" class="accent-picker" role="radiogroup" aria-label="Accent color"></div>
+        </div>
+        <div class="theme-field">
+          <p class="theme-field-label">Chord symbols</p>
+          <div id="project-settings-chord-font-toggle" class="chord-font-toggle" role="radiogroup" aria-label="Chord symbol font"></div>
+        </div>
+        <p class="field-note">Accent tints buttons, highlights, and transitions. Chord-symbol style also drives the project title.</p>
+      </fieldset>
     </div>
     <footer class="dialog-footer">
       <p id="project-settings-hint">Everything here can be changed later from the project title.</p>
@@ -139,12 +151,53 @@ export function mountProjectSettingsModal({ container }) {
   populateStaticOptions(dialog);
   renderKeyDial(dialog);
   renderEnharmonicChips(dialog);
+  renderAccentPicker(dialog);
+  renderChordFontToggle(dialog);
   return dialog;
 }
 
 function populateStaticOptions(dialog) {
   const meterSelect = dialog.querySelector('#project-settings-meter');
   TIME_SIG_OPTIONS.forEach((label) => meterSelect.add(new Option(label, label)));
+}
+
+// Labels for the two chord-font modes. Kept next to the picker (not in state.js)
+// because they are UI copy, not part of the persistence contract.
+const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical' };
+
+function renderAccentPicker(dialog) {
+  const container = dialog.querySelector('#project-settings-accent-picker');
+  container.replaceChildren();
+  ACCENT_PRESETS.forEach((preset) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'accent-swatch';
+    btn.dataset.accent = preset.hex;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', 'false');
+    btn.setAttribute('aria-label', `${ preset.name } · ${ preset.mood }`);
+    btn.innerHTML = `
+      <span class="accent-swatch-dot" style="background:${ preset.hex }"></span>
+      <span class="accent-swatch-name">${ preset.name }</span>
+      <span class="accent-swatch-mood">${ preset.mood }</span>
+    `;
+    container.appendChild(btn);
+  });
+}
+
+function renderChordFontToggle(dialog) {
+  const container = dialog.querySelector('#project-settings-chord-font-toggle');
+  container.replaceChildren();
+  CHORD_FONTS.forEach((font) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chord-font-option';
+    btn.dataset.chordFont = font;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', 'false');
+    btn.textContent = CHORD_FONT_LABELS[font];
+    container.appendChild(btn);
+  });
 }
 
 function polar(angleRad, radius) {
@@ -271,6 +324,8 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
   const enharmonics = dialog.querySelector('#project-settings-key-enharmonics');
   const keyLabel = dialog.querySelector('#project-settings-key-label');
   const keySubLabel = dialog.querySelector('#project-settings-key-sub');
+  const accentPicker = dialog.querySelector('#project-settings-accent-picker');
+  const chordFontToggle = dialog.querySelector('#project-settings-chord-font-toggle');
 
   const isCreate = mode === 'create';
   kicker.textContent = isCreate ? 'New project' : 'Edit project';
@@ -290,6 +345,40 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
 
   let currentKey = initial.settings.key;
   syncKeyUI();
+
+  const initialTheme = makeTheme(initial.settings.theme);
+  let currentAccent = initialTheme.accent;
+  let currentChordFont = initialTheme.chordFont;
+  syncThemeUI();
+
+  function syncThemeUI() {
+    accentPicker.querySelectorAll('.accent-swatch').forEach((el) => {
+      const active = el.dataset.accent === currentAccent;
+      el.classList.toggle('is-active', active);
+      el.setAttribute('aria-checked', String(active));
+      // Show the ring in the accent's own hex so the selection preview reads
+      // as a live theme swatch, not just a generic "selected" state.
+      el.style.setProperty('--swatch-ring', active ? el.dataset.accent : 'transparent');
+    });
+    chordFontToggle.querySelectorAll('.chord-font-option').forEach((el) => {
+      const active = el.dataset.chordFont === currentChordFont;
+      el.classList.toggle('is-active', active);
+      el.setAttribute('aria-checked', String(active));
+    });
+  }
+
+  accentPicker.onclick = (event) => {
+    const swatch = event.target.closest('.accent-swatch');
+    if (!swatch) return;
+    currentAccent = swatch.dataset.accent;
+    syncThemeUI();
+  };
+  chordFontToggle.onclick = (event) => {
+    const option = event.target.closest('.chord-font-option');
+    if (!option) return;
+    currentChordFont = option.dataset.chordFont;
+    syncThemeUI();
+  };
 
   function syncKeyUI() {
     const canonical = ENHARMONIC_TO_WEDGE[currentKey] ?? null;
@@ -350,6 +439,7 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit }) {
         timeSig: { num, den },
         key: currentKey,
         clef: clefSelect.value,
+        theme: { accent: currentAccent, chordFont: currentChordFont },
       },
     });
     dialog.close();

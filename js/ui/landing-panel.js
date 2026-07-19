@@ -160,8 +160,26 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M10 11v7M14 11v7"/></svg>',
 };
 
+/**
+ * Push each project's own theme onto its card so the accent stripe (border-
+ * left) and title font reflect that project — not whatever theme was last
+ * applied to the document root. `--card-accent` overrides `--accent` inside
+ * the card scope; `data-chord-font` re-resolves `--font-chord` locally.
+ */
+function applyCardTheme(card, project) {
+  const theme = project.progression?.settings?.theme;
+  if (!theme) return;
+  if (theme.accent) card.style.setProperty('--card-accent', theme.accent);
+  if (theme.chordFont) card.dataset.chordFont = theme.chordFont;
+}
+
 function iconButton({ icon, label, action, dangerous = false }) {
-  return `<button type="button" class="landing-card-icon${ dangerous ? ' danger' : '' }" data-action="${ action }" title="${ label }" aria-label="${ label }">${ ICONS[icon] }</button>`;
+  // Uses the shared .icon-button primitive from css/base.css so every icon
+  // button in the app (landing, editor, dialog) picks up hover/focus tweaks
+  // in one place.
+  const classes = ['icon-button', 'is-bordered'];
+  if (dangerous) classes.push('is-danger');
+  return `<button type="button" class="${ classes.join(' ') }" data-action="${ action }" title="${ label }" aria-label="${ label }">${ ICONS[icon] }</button>`;
 }
 
 function renderCard(project, kind, callbacks) {
@@ -179,6 +197,7 @@ function renderCard(project, kind, callbacks) {
     card.className = `landing-card landing-card-demo`;
     card.dataset.projectId = project.id;
     card.type = 'button';
+    applyCardTheme(card, project);
     card.innerHTML = `
       <span class="landing-card-badge">Demo · click to open a copy</span>
       <span class="landing-card-name">${ escapeHtml(project.name) }</span>
@@ -191,6 +210,7 @@ function renderCard(project, kind, callbacks) {
   const card = document.createElement('article');
   card.className = `landing-card landing-card-${ kind }`;
   card.dataset.projectId = project.id;
+  applyCardTheme(card, project);
 
   const iconRow = kind === 'recent'
     ? [

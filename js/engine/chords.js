@@ -107,10 +107,74 @@ export function noteName(midi, key = 0, withOctave = true) {
  * chord names itself without running detection); falls back to a note list.
  * When a hint is available, the note list is spelled with the chord's letters
  * so a G♯ major reads "G♯4 · B♯4 · D♯5" instead of "G♯4 · C5 · D♯5".
+ *
+ * Plain-text label — for the coach panel, the coach API payload, and any
+ * other consumer that can't render superscripts. UI surfaces that render
+ * chord glyphs (editor rows, quick-add chips) should call
+ * `formatChordSymbol` instead so extensions display in idiomatic superscript.
  */
 export function chordDisplayName(chord, key = 0) {
   if (chord.hint) return `${ noteName(chord.hint.rootMidi, key, false) } ${ chord.hint.quality }`;
   return chord.notes.map((note) => noteName(note, key)).join('–');
+}
+
+/**
+ * Idiomatic lead-sheet chord symbol split into a rendering-ready shape.
+ * Callers decide how to draw the parts — the editor renders baseline text
+ * followed by a <sup> for the superscript so the extension sits above the
+ * baseline the way engravers write it (Cmaj⁷, Cm⁷, C°⁷, Cø⁷, Csus⁴, C⁺).
+ *
+ * Convention (per the design revamp):
+ *   - Root letter + accidental      → baseline
+ *   - Minor 'm'                     → baseline (right after root)
+ *   - 'sus' modifier                → baseline
+ *   - Numeric extensions (7/9/…)    → superscript
+ *   - 'maj' modifier on maj7        → superscript with the number
+ *   - Symbols °, ø, +               → superscript (° for diminished,
+ *                                     ø for half-diminished, + for aug)
+ *
+ * When the chord has no display hint AND its notes don't resolve to a
+ * recognized quality, `root` is empty and `plain` carries the note-list
+ * fallback so the caller can render that instead.
+ *
+ * @param {import('../state.js').Chord} chord
+ * @param {number} [key]  Circle-of-fifths integer for accidental spelling.
+ * @returns {{ root: string, baseline: string, superscript: string, plain: string }}
+ */
+export function formatChordSymbol(chord, key = 0) {
+  const identity = chord.hint
+    ? { rootPc: pitchClassOf(chord.hint.rootMidi), quality: chord.hint.quality, root: noteName(chord.hint.rootMidi, key, false) }
+    : detectForDisplay(chord, key);
+
+  if (!identity) {
+    return { root: '', baseline: '', superscript: '', plain: chordDisplayName(chord, key) };
+  }
+  const spec = QUALITY_SYMBOL[identity.quality] ?? { baseline: ` ${ identity.quality }`, superscript: '' };
+  return { root: identity.root, baseline: spec.baseline, superscript: spec.superscript, plain: chordDisplayName(chord, key) };
+}
+
+/** Baseline/superscript split for every quality in QUALITIES. */
+const QUALITY_SYMBOL = Object.freeze({
+  Major: { baseline: '',    superscript: '' },
+  Minor: { baseline: 'm',   superscript: '' },
+  Dom7:  { baseline: '',    superscript: '7' },
+  Maj7:  { baseline: '',    superscript: 'maj7' },
+  Min7:  { baseline: 'm',   superscript: '7' },
+  Dim:   { baseline: '',    superscript: '°' },
+  Dim7:  { baseline: '',    superscript: '°7' },
+  m7b5:  { baseline: '',    superscript: 'ø7' },
+  Sus2:  { baseline: 'sus', superscript: '2' },
+  Sus4:  { baseline: 'sus', superscript: '4' },
+  Aug:   { baseline: '',    superscript: '+' },
+});
+
+function detectForDisplay(chord, key) {
+  const detected = inferChordIdentity(chord, { preferBassRoot: true });
+  if (!detected.recognised) return null;
+  // Spell the root using the same key-signature rules the rest of the UI uses,
+  // then hand off the pitch class + quality for symbol lookup.
+  const rootMidi = 60 + detected.rootPc;
+  return { rootPc: detected.rootPc, quality: detected.quality, root: noteName(rootMidi, key, false) };
 }
 
 /**

@@ -9,19 +9,30 @@
  * by the pencil button — they no longer have inline controls here.
  */
 import { availableBeats, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable } from '../state.js';
-import { chordDisplayName, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
+import { chordDisplayName, formatChordSymbol, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { escapeHtml } from '../util/html.js';
+import { majorKeyName, timeSigLabel, tempoLabel } from '../util/labels.js';
+
+// Quick-add chord chips shown in the empty state. Each is a diatonic
+// C-major chord — the four most common starting points for a new
+// progression. `rootMidi` is the octave the piano modal defaults to.
+const QUICK_CHORDS = [
+  { label: 'C',  rootMidi: 60, quality: 'Major' },
+  { label: 'Am', rootMidi: 57, quality: 'Minor' },
+  { label: 'F',  rootMidi: 53, quality: 'Major' },
+  { label: 'G',  rootMidi: 55, quality: 'Major' },
+];
 
 const TEMPLATE = `
 <header class="brand-block">
   <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
-    <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="brand-mark" aria-hidden="true"></span>
     <span class="brand-copy"><span class="brand">LEGATO</span>
       <span class="brand-subtitle">Progression coach</span>
     </span>
   </button>
-  <button id="view-all-projects" class="text-action view-all-projects" type="button">View all projects</button>
+  <button id="view-all-projects" class="text-action view-all-projects" type="button">All projects</button>
 </header>
 
 <div class="editor-scroll">
@@ -31,16 +42,15 @@ const TEMPLATE = `
       <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
       <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 4.5 5 5-9.5 9.5H5v-5z"></path><path d="m12.5 6.5 5 5"></path></svg>
-        <span>Edit Project Settings</span>
       </button>
     </div>
+    <div id="project-meta-pills" class="project-meta-pills"></div>
   </section>
 
   <section class="editor-section" aria-labelledby="chords-title">
     <div class="section-title">
-      <h2 id="chords-title">Chord material</h2><button id="add-chord" class="text-action">+ Add chord</button>
+      <h2 id="chords-title">Chords</h2><button id="add-chord" class="text-action">+ Add</button>
     </div>
-    <div class="table-head"><span>Voicing</span><span>Beats</span><span></span></div>
     <div id="progression-list" class="progression-list"></div>
   </section>
 </div>
@@ -56,6 +66,7 @@ export function mountEditorPanel({ container, callbacks }) {
   const viewAllBtn = container.querySelector('#view-all-projects');
   const projectNameInput = container.querySelector('#project-name-input');
   const editSettingsBtn = container.querySelector('#edit-project-settings');
+  const metaPillsEl = container.querySelector('#project-meta-pills');
   const expandedSeamIndexes = new Set();
   let directEditorOpenForCurrentRender = null;
 
@@ -72,7 +83,6 @@ export function mountEditorPanel({ container, callbacks }) {
   function makeChordRow(progression, chord, index) {
     const timeSig = progression.settings.timeSig;
     const beatChoices = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
-    const beatLabel = (beats) => beats === 0.5 ? '½' : beats === 1.5 ? '1½' : String(beats);
     const row = document.createElement('article');
     row.className = 'chord-row';
     const identity = chordSpellingIdentity(chord);
@@ -82,11 +92,26 @@ export function mountEditorPanel({ container, callbacks }) {
     const currentBeats = Number(barsToBeats(chord.bars, timeSig).toFixed(4));
     const options = beatChoices.includes(currentBeats) ? beatChoices : [...beatChoices, currentBeats].sort((a, b) => a - b);
     const displayName = escapeHtml(chordDisplayName(chord, progression.settings.key));
-    row.innerHTML = `<button class="chord-main" aria-label="Edit ${ displayName }"><strong>${ displayName }</strong><small>${ escapeHtml(notes) }</small></button><select class="chord-bars" aria-label="Beats for ${ displayName }">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ beatLabel(beats) }</option>`).join('') }</select><button class="delete-button" aria-label="Delete ${ displayName }">×</button>`;
+    const glyphHtml = renderChordGlyph(formatChordSymbol(chord, progression.settings.key));
+    row.innerHTML = `<button class="chord-main" aria-label="Edit ${ displayName }"><strong class="chord-glyph">${ glyphHtml }</strong><small>${ escapeHtml(notes) }</small></button><label class="chord-beats" aria-label="Beats for ${ displayName }"><span class="chord-beats-display" aria-hidden="true">${ formatBeatDisplay(currentBeats) } <em>${ currentBeats === 1 ? 'beat' : 'beats' }</em></span><select class="chord-beats-select">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ formatBeatDisplay(beats) }</option>`).join('') }</select></label><button class="delete-button" aria-label="Delete ${ displayName }">×</button>`;
     row.querySelector('.chord-main').onclick = () => callbacks.onEditChord(chord);
-    row.querySelector('.chord-bars').onchange = (event) => callbacks.onSetChordBeats(chord, Number(event.target.value));
+    row.querySelector('.chord-beats-select').onchange = (event) => callbacks.onSetChordBeats(chord, Number(event.target.value));
     row.querySelector('.delete-button').onclick = () => callbacks.onDeleteChord(chord);
     return row;
+  }
+
+  function renderChordGlyph({ root, baseline, superscript, plain }) {
+    if (!root) return escapeHtml(plain);
+    const rootHtml = escapeHtml(root);
+    const baselineHtml = baseline ? escapeHtml(baseline) : '';
+    const supHtml = superscript ? `<sup>${ escapeHtml(superscript) }</sup>` : '';
+    return `${ rootHtml }${ baselineHtml }${ supHtml }`;
+  }
+
+  function formatBeatDisplay(beats) {
+    if (beats === 0.5) return '½';
+    if (beats === 1.5) return '1½';
+    return String(beats);
   }
 
   function formatBeatCost(beats) {
@@ -151,7 +176,7 @@ export function mountEditorPanel({ container, callbacks }) {
   function renderProgression(progression, selectedSeam) {
     progressionListEl.replaceChildren();
     if (!progression.chords.length) {
-      progressionListEl.innerHTML = '<div class="empty-state">No material yet. Add a chord and choose its exact piano voicing.</div>';
+      progressionListEl.append(makeEmptyState());
       return;
     }
     expandedSeamIndexes.forEach((index) => {
@@ -168,6 +193,56 @@ export function mountEditorPanel({ container, callbacks }) {
     });
   }
 
+  function renderMetaPills(settings) {
+    metaPillsEl.replaceChildren();
+    const pills = [
+      { label: timeSigLabel(settings.timeSig), variant: 'filled' },
+      { label: majorKeyName(settings.key), variant: 'outline' },
+      { label: tempoLabel(settings.tempo), variant: 'outline' },
+    ];
+    for (const pill of pills) {
+      const el = document.createElement('span');
+      el.className = `meta-pill meta-pill--${ pill.variant }`;
+      el.textContent = pill.label;
+      metaPillsEl.append(el);
+    }
+  }
+
+  function makeEmptyState() {
+    // See css/editor-pane.css `.empty-state` for the treatment. The
+    // Tenutino SVG is a rough placeholder — the design handoff calls for a
+    // sourced illustration in the same abstract-line-art style before ship.
+    const el = document.createElement('div');
+    el.className = 'empty-state';
+    el.innerHTML = `
+      <div class="empty-state-illustration" aria-hidden="true">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="50" cy="62" rx="26" ry="30" fill="currentColor"></ellipse>
+          <path d="M22 40 C20 26 32 12 50 12 C68 12 82 24 78 42 C82 34 74 52 68 46 C64 42 60 38 50 40 C40 42 32 46 32 48 C30 44 24 46 22 40 Z" fill="var(--panel-3)"></path>
+          <circle cx="42" cy="60" r="2" fill="var(--ink)"></circle>
+          <circle cx="58" cy="60" r="2" fill="var(--ink)"></circle>
+          <path d="M45 72 Q50 74 55 72" stroke="var(--ink)" stroke-width="1.6" fill="none" stroke-linecap="round"></path>
+        </svg>
+      </div>
+      <div class="empty-state-copy">
+        <h3 class="empty-state-headline">Tenutino is waiting.</h3>
+        <p class="empty-state-subcopy">Set the first chord. Everything follows from there.</p>
+      </div>
+      <div class="empty-state-quick-chords" role="group" aria-label="Quick-start chord"></div>
+    `;
+    const chipRow = el.querySelector('.empty-state-quick-chords');
+    for (const chord of QUICK_CHORDS) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'quick-chord-chip';
+      chip.textContent = chord.label;
+      chip.setAttribute('aria-label', `Add ${ chord.label } chord`);
+      chip.onclick = () => callbacks.onQuickAddChord?.(chord.rootMidi, chord.quality);
+      chipRow.append(chip);
+    }
+    return el;
+  }
+
   function syncProjectName(name) {
     // Don't overwrite while the user is actively editing.
     if (document.activeElement === projectNameInput) return;
@@ -178,6 +253,7 @@ export function mountEditorPanel({ container, callbacks }) {
   return {
     render({ progression, selectedSeam, projectName }) {
       syncProjectName(projectName);
+      renderMetaPills(progression.settings);
       renderProgression(progression, selectedSeam);
     },
   };

@@ -2,10 +2,11 @@
    empty/loading/error placeholder states. */
 
 .coach-panel {
-    margin-top: 36px;
+    margin-top: 28px;
+    padding: 24px;
+    background: var(--panel-2);
     border: 1px solid var(--hairline);
-    background: linear-gradient(135deg, rgba(23, 18, 14, .92), rgba(13, 10, 8, .92));
-    padding: 26px
+    border-radius: var(--radius-card)
 }
 
 .coach-heading {
@@ -18,9 +19,10 @@
 }
 
 .coach-heading h2 {
-    font: 340 clamp(2.4rem, 4vw, 4.2rem)/1 var(--font-display);
-    margin: 7px 0 0;
-    font-size: 2.1rem
+    font: 600 1.5rem var(--font-body);
+    letter-spacing: -.005em;
+    color: var(--ivory);
+    margin: 7px 0 0
 }
 
 .coach-heading>p {
@@ -41,11 +43,11 @@
     justify-content: center;
     gap: 12px;
     color: var(--tan-dim);
-    font: italic .92rem var(--font-display)
+    font: italic 500 .88rem var(--font-body)
 }
 
 .coach-empty span {
-    color: var(--anchor);
+    color: var(--accent);
     font-size: 1.6rem
 }
 
@@ -64,7 +66,7 @@
     width: 16px;
     height: 16px;
     border: 1px solid var(--hairline);
-    border-top-color: var(--anchor);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin .8s linear infinite
 }
@@ -86,35 +88,45 @@
 .coach-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--hairline)
+    gap: 12px
 }
 
 .coach-card {
-    background: var(--panel);
-    padding: 20px;
-    min-height: 145px
+    background: var(--panel-4);
+    padding: 16px 18px;
+    border-radius: var(--radius-cell);
+    min-height: 120px
 }
 
 .coach-card span {
     display: block;
-    color: var(--anchor);
-    font: 500 .57rem var(--font-mono);
+    color: var(--accent);
+    font: 600 .58rem var(--font-mono);
     text-transform: uppercase;
     letter-spacing: .12em;
-    margin-bottom: 11px
+    margin-bottom: 8px
 }
 
 .coach-card p {
     margin: 0;
     color: var(--tan);
-    font-size: .76rem;
-    line-height: 1.7
+    font: 500 .8rem/1.55 var(--font-body)
+}
+
+/* Reflect card — a prompt, not an explanation. Inverted against the accent
+   so it visually reads as the highlight card. */
+.coach-card.reflect {
+    background: var(--accent)
+}
+
+.coach-card.reflect span {
+    color: var(--ink);
+    opacity: .7
 }
 
 .coach-card.reflect p {
-    font: 500 1.04rem/1.5 var(--font-display);
-    color: var(--ivory)
+    font: italic 500 .92rem/1.45 var(--font-body);
+    color: var(--ink)
 }
 
 @media(prefers-reduced-motion:reduce) {

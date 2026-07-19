@@ -7,7 +7,7 @@
 .sheet-music-pane {
     min-width: 0;
     padding: 34px clamp(28px, 4vw, 68px) 64px;
-    background: radial-gradient(circle at 75% 20%, rgba(209, 161, 90, .035), transparent 35%), var(--ink)
+    background: radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--accent) 3.5%, transparent), transparent 35%), var(--ink)
 }
 
 .sheet-music-header {
@@ -19,9 +19,21 @@
     border-bottom: 1px solid var(--hairline)
 }
 
-.sheet-music-header h2 {
-    font: 340 clamp(2.4rem, 4vw, 4.2rem)/1 var(--font-display);
-    margin: 7px 0 0
+.sheet-music-header > .chord-font-toggle {
+    align-self: center
+}
+
+@media(max-width:650px) {
+    .sheet-music-header > .chord-font-toggle {
+        align-self: flex-start
+    }
+}
+
+.sheet-music-title {
+    margin: 0;
+    font: 600 1.25rem var(--font-body);
+    letter-spacing: -.005em;
+    color: var(--ivory)
 }
 
 /* Transport row: play/stop + status on the left, tempo/clef overrides pinned
@@ -59,7 +71,7 @@
 
 .sheet-music-controls .tempo-control input[type="range"] {
     width: 200px;
-    accent-color: var(--anchor)
+    accent-color: var(--accent)
 }
 
 .sheet-music-controls .tempo-value {
@@ -80,7 +92,7 @@
 
 .sheet-music-controls .tempo-control input[type="number"]:focus {
     outline: none;
-    border-color: var(--anchor)
+    border-color: var(--accent)
 }
 
 .sheet-music-controls .tempo-control small {
@@ -102,7 +114,7 @@
 
 .sheet-music-controls .clef-control select:focus {
     outline: none;
-    border-color: var(--anchor)
+    border-color: var(--accent)
 }
 
 .sheet-music-zoom-control {
@@ -133,7 +145,7 @@
 
 .sheet-music-zoom-control button:hover:not(:disabled) {
     color: var(--ivory);
-    background: rgba(209, 161, 90, .12)
+    background: color-mix(in srgb, var(--accent) 12%, transparent)
 }
 
 .sheet-music-zoom-control button:disabled {
@@ -162,8 +174,8 @@
     align-items: center;
     border: 1px solid rgba(196, 167, 126, .11);
     background:
-        linear-gradient(90deg, rgba(209, 161, 90, .025) 1px, transparent 1px) 0 0 / 64px 100%,
-        radial-gradient(ellipse at 24% 46%, rgba(209, 161, 90, .075), transparent 34%),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 2.5%, transparent) 1px, transparent 1px) 0 0 / 64px 100%,
+        radial-gradient(ellipse at 24% 46%, color-mix(in srgb, var(--accent) 7.5%, transparent), transparent 34%),
         linear-gradient(180deg, rgba(23, 18, 14, .24), rgba(5, 4, 3, .08));
     box-shadow:
         inset 0 1px rgba(230, 206, 170, .035),
@@ -180,8 +192,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-        linear-gradient(135deg, rgba(209, 161, 90, .1), transparent 16px) top left / 42px 42px no-repeat,
-        linear-gradient(315deg, rgba(209, 161, 90, .08), transparent 16px) bottom right / 42px 42px no-repeat;
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 16px) top left / 42px 42px no-repeat,
+        linear-gradient(315deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 16px) bottom right / 42px 42px no-repeat;
     opacity: .55
 }
 
@@ -192,7 +204,7 @@
     left: 22%;
     top: 50%;
     transform: translateY(-50%);
-    background: radial-gradient(circle, rgba(209, 161, 90, .08), transparent 67%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent), transparent 67%);
     pointer-events: none;
     transition: opacity .7s, transform .9s;
     opacity: .8
@@ -255,7 +267,7 @@
 
 .sheet-music .notice {
     color: var(--tan-dim);
-    font: italic 1rem var(--font-display);
+    font: italic 500 .95rem var(--font-body);
     padding: 90px 20px;
     text-align: center
 }
@@ -265,7 +277,7 @@
 }
 
 .measure-group.is-playing {
-    filter: drop-shadow(0 0 7px rgba(209, 161, 90, .72));
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 72%, transparent));
     opacity: 1
 }
 
@@ -290,8 +302,8 @@
     display: block;
     width: var(--sheet-music-progress);
     height: 100%;
-    background: linear-gradient(90deg, rgba(122, 102, 75, .22), var(--anchor));
-    box-shadow: 0 0 14px rgba(209, 161, 90, .46);
+    background: linear-gradient(90deg, rgba(122, 102, 75, .22), var(--accent));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 46%, transparent);
     transition: width 80ms linear
 }
 
@@ -304,7 +316,7 @@
     height: 5px;
     border-radius: 50%;
     background: var(--ivory);
-    box-shadow: 0 0 12px var(--anchor);
+    box-shadow: 0 0 12px var(--accent);
     transform: translate(50%, -50%)
 }
 
@@ -316,8 +328,8 @@
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--anchor);
-    box-shadow: 0 0 10px rgba(209, 161, 90, .72);
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 72%, transparent);
     transform: translate(50%, -50%)
 }
 

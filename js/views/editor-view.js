@@ -14,8 +14,8 @@
  * On top of every mutation, `scheduleAutosave()` debounces a write to the
  * ProjectStore so localStorage stays in sync without a manual save button.
  */
-import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
-import { chordDisplayName } from '../engine/chords.js';
+import { compile, makeChord, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
+import { chordDisplayName, notesFrom } from '../engine/chords.js';
 import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { playSegments, stopPlayback, pausePlayback, resumePlayback } from '../audio/playback.js';
@@ -27,6 +27,7 @@ import { mountTransport } from '../ui/transport.js';
 import { mountCoachPanel } from '../ui/coach-panel.js';
 import { buildCoachEvidence } from '../coach/evidence.js';
 import { requestCoach } from '../coach/coach.js';
+import { applyTheme, clearTheme } from '../theme.js';
 import { navigate, LANDING_HASH } from '../router.js';
 
 const SHELL_TEMPLATE = `
@@ -59,6 +60,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let editingId = null;
       let selectedSeam = 0;
 
+      // Apply per-project accent + chord-font to the document root so every
+      // panel restyles instantly. Cleared on unmount so navigating away
+      // (landing page, other project) doesn't inherit this project's look.
+      applyTheme(progression.settings.theme);
+
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
       const shell = root.querySelector('.app-shell');
@@ -71,6 +77,15 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             // affect what Play should schedule. Nothing else to do here — the
             // panel and audio scheduler both re-read effective settings on
             // demand.
+          },
+          onSetChordFont(chordFont) {
+            // The header toggle is a shortcut into the same code path project
+            // settings uses. applyProjectSettings persists + re-applies the
+            // theme; the panel re-syncs on the next render.
+            applyProjectSettings({
+              name: currentName,
+              settings: { ...progression.settings, theme: { ...progression.settings.theme, chordFont } },
+            });
           },
         },
       });
@@ -88,6 +103,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
                   timeSig: { ...progression.settings.timeSig },
                   key: progression.settings.key,
                   clef: progression.settings.clef,
+                  theme: { ...progression.settings.theme },
                 },
               },
               onSubmit: ({ name, settings }) => applyProjectSettings({ name, settings }),
@@ -96,6 +112,17 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           onAddChord() {
             editingId = null;
             openPianoModal(pianoDialog, null, saveChord, progression.settings.timeSig, progression.settings.key);
+          },
+          onQuickAddChord(rootMidi, quality) {
+            // Empty-state quick chips: append a diatonic triad with the same
+            // display hint the demo projects use, then flow through the
+            // saveChord path so autosave/coach/rerender all fire.
+            editingId = null;
+            saveChord({
+              notes: notesFrom(rootMidi, quality),
+              bars: 1,
+              hint: { rootMidi, quality },
+            });
           },
           onEditChord(chord) {
             editingId = chord.id;
@@ -192,6 +219,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         const keyChanged = previous.key !== settings.key;
         const clefChanged = previous.clef !== settings.clef;
         const nameChanged = currentName !== name;
+        const nextTheme = makeTheme(settings.theme);
+        const themeChanged = previous.theme.accent !== nextTheme.accent || previous.theme.chordFont !== nextTheme.chordFont;
 
         currentName = name;
         progression.settings = {
@@ -199,7 +228,9 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           timeSig: { ...settings.timeSig },
           key: settings.key,
           clef: settings.clef,
+          theme: nextTheme,
         };
+        if (themeChanged) applyTheme(nextTheme);
 
         // Key is spelling only: it never mutates chord.notes. Transposition is
         // a separate future feature. Time signature can invalidate technique
@@ -207,7 +238,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         if (timeSigChanged) resetIneligibleSeams();
         if (keyChanged || timeSigChanged || clefChanged) coach.setEmpty();
 
-        if (keyChanged || timeSigChanged || clefChanged || nameChanged) {
+        // Theme flips need a rerender so the chord-font toggle syncs its
+        // active pill and the meta pills re-read the accent-derived colors.
+        // (Accent color itself cascades via CSS custom properties without a
+        // rerender, but the segmented toggle stores its state in DOM classes.)
+        if (keyChanged || timeSigChanged || clefChanged || nameChanged || themeChanged) {
           rerender();
         } else {
           scheduleAutosave();
@@ -373,6 +408,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           window.removeEventListener('beforeunload', beforeUnload);
           stopPlayback();
           await flushSave();
+          clearTheme();
           root.replaceChildren();
         },
       };

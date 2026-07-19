@@ -24,8 +24,8 @@
 }
 
 .landing-brand .brand {
-    font: 600 1.05rem var(--font-display);
-    letter-spacing: .18em
+    font: 700 .82rem var(--font-body);
+    letter-spacing: .06em
 }
 
 .landing-tagline {
@@ -49,14 +49,15 @@
 }
 
 .landing-hero h1 {
-    font: 340 clamp(2.6rem, 5vw, 4.7rem)/.92 var(--font-display);
-    letter-spacing: -.04em;
+    font: 700 clamp(2.4rem, 4.4vw, 3.8rem)/1 var(--font-body);
+    letter-spacing: -.02em;
     margin: 14px 0 20px
 }
 
 .landing-hero h1 em {
-    font-weight: 500;
-    color: var(--anchor)
+    font-weight: 700;
+    font-style: normal;
+    color: var(--accent)
 }
 
 .landing-lede {
@@ -85,11 +86,10 @@
 
 .landing-primary,
 .landing-secondary {
-    padding: 11px 20px;
-    border-radius: 999px;
-    font: 500 .72rem var(--font-mono);
-    letter-spacing: .1em;
-    text-transform: uppercase;
+    padding: 10px 20px;
+    border-radius: var(--radius-pill);
+    font: 600 .78rem var(--font-body);
+    letter-spacing: 0;
     cursor: pointer;
     transition: border-color .15s ease, color .15s ease, background .15s ease
 }
@@ -108,14 +108,13 @@
 }
 
 .landing-primary {
-    border: 1px solid var(--anchor);
-    background: var(--anchor);
+    border: 1px solid var(--accent);
+    background: var(--accent);
     color: var(--ink)
 }
 
 .landing-primary:hover {
-    background: transparent;
-    color: var(--anchor)
+    filter: brightness(1.08)
 }
 
 .landing-secondary {
@@ -125,8 +124,8 @@
 }
 
 .landing-secondary:hover {
-    border-color: rgba(209, 161, 90, .55);
-    color: var(--anchor)
+    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent);
+    color: var(--accent)
 }
 
 .landing-notice {
@@ -140,12 +139,12 @@
 }
 
 .landing-notice[data-level="warn"] {
-    border-color: rgba(209, 161, 90, .4);
-    color: var(--anchor)
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent)
 }
 
 .landing-notice[data-level="error"] {
-    border-color: rgba(200, 123, 103, .55);
+    border-color: color-mix(in srgb, var(--danger) 55.0%, transparent);
     color: var(--danger)
 }
 
@@ -200,7 +199,7 @@
 
 .landing-trash-empty {
     padding: 7px 14px;
-    border: 1px solid rgba(200, 123, 103, .3);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
     background: transparent;
     color: var(--danger);
     font: 500 .62rem var(--font-mono);
@@ -211,8 +210,8 @@
 }
 
 .landing-trash-empty:hover {
-    border-color: rgba(200, 123, 103, .6);
-    background: rgba(200, 123, 103, .08)
+    border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+    background: color-mix(in srgb, var(--danger) 8%, transparent)
 }
 
 .landing-grid {
@@ -268,19 +267,38 @@
     text-align: center
 }
 
+/* Landing card. --card-accent (set inline per project by landing-panel) drops
+   into --accent's role within the card scope so the border stripe reflects
+   each project's own theme; --font-chord is re-resolved from the card's own
+   data-chord-font attribute so the title renders in the project's font too. */
 .landing-card {
+    --accent: var(--card-accent, #E8A94B);
     position: relative;
     display: flex;
     flex-direction: column;
     background: var(--panel-2);
     border: 1px solid var(--hairline);
+    border-radius: var(--radius-chord);
+    border-left: 3px solid var(--accent);
     padding: 20px;
     min-height: 138px;
     transition: border-color .15s ease, transform .15s ease
 }
 
 .landing-card:hover {
-    border-color: rgba(209, 161, 90, .45)
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent)
+}
+
+.landing-card[data-chord-font="jazztext"] {
+    --font-chord: var(--font-chord-jazz);
+    --font-chord-style: normal;
+    --font-chord-weight: 700
+}
+
+.landing-card[data-chord-font="classical"] {
+    --font-chord: var(--font-chord-classical);
+    --font-chord-style: normal;
+    --font-chord-weight: 700
 }
 
 .landing-card-body {
@@ -311,10 +329,10 @@
 }
 
 .landing-card-name {
-    font: 500 1.05rem var(--font-display);
-    letter-spacing: -.01em;
+    font: var(--font-chord-weight) 1.4rem/1.1 var(--font-chord);
+    font-style: var(--font-chord-style);
+    letter-spacing: 0;
     color: var(--ivory);
-    line-height: 1.25;
     min-width: 0
 }
 
@@ -359,70 +377,38 @@
     transform: translateY(0)
 }
 
+/* Restore button (only shown on trashed cards). Same pill treatment as the
+   accent "+ Add" but transparent + hairline so it doesn't compete with the
+   icon row next to it. Everything else about card action buttons comes from
+   the .icon-button primitive in css/base.css. */
 .landing-card-primary {
     display: inline-flex;
     align-items: center;
-    height: 30px;
-    padding: 0 14px;
+    height: 32px;
+    padding: 0 16px;
     border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
     background: transparent;
     color: var(--tan);
-    font: 500 .65rem var(--font-mono);
-    text-transform: uppercase;
-    letter-spacing: .12em;
+    font: 600 .72rem var(--font-body);
+    letter-spacing: 0;
     cursor: pointer;
-    transition: color .15s ease, border-color .15s ease
+    transition: color .15s ease, border-color .15s ease, background .15s ease
 }
 
 .landing-card-primary:hover {
-    color: var(--anchor);
-    border-color: rgba(209, 161, 90, .55)
+    color: var(--ivory);
+    border-color: var(--accent-border);
+    background: var(--accent-soft)
 }
 
-.landing-card-icon {
-    display: grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border: 1px solid var(--hairline);
-    background: transparent;
-    color: var(--tan-dim);
-    cursor: pointer;
-    transition: color .12s ease, border-color .12s ease, background .12s ease
-}
-
-.landing-card-icon svg {
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round
-}
-
-.landing-card-icon:hover {
-    color: var(--anchor);
-    border-color: rgba(209, 161, 90, .55)
-}
-
-.landing-card-icon.danger:hover {
-    color: var(--danger);
-    border-color: rgba(200, 123, 103, .55);
-    background: rgba(200, 123, 103, .08)
-}
-
-.landing-card-icon.danger {
-    color: var(--danger);
-    border-color: rgba(200, 123, 103, .38)
-}
-
-.landing-card-actions > .landing-card-icon:first-of-type {
+/* First icon in the row pushes to the right on standard cards; hugs its
+   sibling on trashed cards where Restore is the primary button. */
+.landing-card-actions > .icon-button:first-of-type {
     margin-left: auto
 }
 
-.landing-card-recent .landing-card-actions > .landing-card-icon:first-of-type {
+.landing-card-recent .landing-card-actions > .icon-button:first-of-type {
     margin-left: 0
 }
 
@@ -438,15 +424,15 @@
 }
 
 .landing-card-demo:focus-visible {
-    outline: 2px solid var(--anchor);
+    outline: 2px solid var(--accent);
     outline-offset: 2px
 }
 
 .landing-card-badge {
     align-self: flex-start;
     padding: 3px 9px;
-    background: rgba(209, 161, 90, .12);
-    color: var(--anchor);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
     font: 500 .55rem var(--font-mono);
     text-transform: uppercase;
     letter-spacing: .15em

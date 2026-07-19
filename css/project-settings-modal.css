@@ -41,20 +41,21 @@
 .project-settings-name input {
     padding: 10px 12px;
     border: 1px solid var(--hairline);
-    background: rgba(23, 18, 14, .65);
+    background: var(--panel-3);
     color: var(--ivory);
-    font: 500 .95rem var(--font-display);
-    letter-spacing: -.005em;
+    font: var(--font-chord-weight) 1.2rem var(--font-chord);
+    font-style: var(--font-chord-style);
     outline: none;
+    border-radius: var(--radius-cell);
     transition: border-color .12s ease;
 }
 
 .project-settings-name input:hover {
-    border-color: rgba(209, 161, 90, .35);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .project-settings-name input:focus {
-    border-color: var(--anchor);
+    border-color: var(--accent);
 }
 
 .project-settings-shell .settings-grid {
@@ -100,11 +101,11 @@
 }
 
 .tempo-input-row input:hover {
-    border-color: rgba(209, 161, 90, .35);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .tempo-input-row input:focus {
-    border-color: var(--anchor);
+    border-color: var(--accent);
 }
 
 .tempo-input-row small {
@@ -158,18 +159,18 @@
 }
 
 .key-wedge:hover {
-    fill: rgba(209, 161, 90, .12);
-    stroke: rgba(209, 161, 90, .55);
+    fill: color-mix(in srgb, var(--accent) 12%, transparent);
+    stroke: color-mix(in srgb, var(--accent) 55.0%, transparent);
 }
 
 .key-wedge:focus-visible {
-    stroke: var(--anchor);
+    stroke: var(--accent);
     stroke-width: 2;
 }
 
 .key-wedge.is-active {
-    fill: rgba(209, 161, 90, .22);
-    stroke: var(--anchor);
+    fill: color-mix(in srgb, var(--accent) 22%, transparent);
+    stroke: var(--accent);
     stroke-width: 1.5;
 }
 
@@ -210,7 +211,7 @@
 
 .key-dial-readout strong {
     color: var(--ivory);
-    font: 500 1rem var(--font-display);
+    font: 600 1rem var(--font-body);
     letter-spacing: -.005em;
 }
 
@@ -246,13 +247,13 @@
 
 .key-enharmonic-chip:hover {
     color: var(--ivory);
-    border-color: rgba(209, 161, 90, .55);
+    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent);
 }
 
 .key-enharmonic-chip.is-active {
-    color: var(--anchor);
-    border-color: var(--anchor);
-    background: rgba(209, 161, 90, .12);
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .project-settings-shell .field-note {
@@ -262,6 +263,85 @@
     line-height: 1.55;
     font-style: italic;
 }
+
+/* Theme fieldset — mood picker (5 accent swatches) + chord-symbol font toggle.
+   Shares fieldset chrome with .key-signature-fieldset above. */
+.theme-fieldset {
+    border: 1px solid var(--hairline);
+    padding: 18px 20px 20px;
+    margin: 0;
+    display: grid;
+    gap: 16px;
+    border-radius: var(--radius-cell);
+}
+
+.theme-fieldset legend {
+    padding: 0 8px;
+    color: var(--tan-dim);
+    font: 400 .58rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.theme-field {
+    display: grid;
+    gap: 10px;
+}
+
+.theme-field-label {
+    margin: 0;
+    color: var(--tan-dim);
+    font: 500 .62rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+}
+
+.accent-picker {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+}
+
+.accent-swatch {
+    --swatch-ring: transparent;
+    display: grid;
+    gap: 8px;
+    padding: 12px 12px 14px;
+    background: var(--panel-3);
+    border: 2px solid var(--swatch-ring);
+    border-radius: var(--radius-cell);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color .15s ease, background .15s ease;
+    color: inherit;
+    font: inherit;
+}
+
+.accent-swatch:hover {
+    background: var(--panel-4);
+}
+
+.accent-swatch-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: block;
+}
+
+.accent-swatch-name {
+    color: var(--ivory);
+    font: 600 .78rem var(--font-body);
+}
+
+.accent-swatch-mood {
+    color: var(--tan-dim);
+    font: 500 .58rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+/* .chord-font-toggle / .chord-font-option styles live in css/base.css so
+   the sheet-music panel and this modal share one visual definition. */
 
 @media (max-width: 620px) {
     .project-settings-shell .settings-grid {
@@ -276,5 +356,10 @@
     .key-dial {
         width: 220px;
         height: 220px;
+    }
+
+    /* 5 swatches wrap to a compact 3+2 grid on narrow screens. */
+    .accent-picker {
+        grid-template-columns: repeat(3, 1fr);
     }
 }
