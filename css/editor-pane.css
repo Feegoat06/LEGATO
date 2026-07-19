@@ -152,7 +152,9 @@
     border-radius: var(--radius-pill);
     font: 600 .68rem var(--font-body);
     letter-spacing: .02em;
-    border: 1px solid transparent
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: filter .15s ease, color .15s ease, border-color .15s ease
 }
 
 .meta-pill--filled {
@@ -164,6 +166,20 @@
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     border-color: color-mix(in srgb, var(--accent) 34%, transparent);
     color: var(--tan)
+}
+
+.meta-pill--filled:hover {
+    filter: brightness(1.08)
+}
+
+.meta-pill--outline:hover {
+    color: var(--ivory);
+    border-color: color-mix(in srgb, var(--accent) 60%, transparent)
+}
+
+.meta-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
 }
 
 .project-name-input {
@@ -201,6 +217,7 @@
     color: var(--tan-dim);
     font: 500 var(--fs-eyebrow) var(--font-body);
     letter-spacing: .02em;
+    white-space: nowrap;
     cursor: pointer;
     transition: color .12s ease, border-color .12s ease
 }

@@ -40,8 +40,8 @@ const TEMPLATE = `
   <section class="project-title-block">
     <div class="project-title-row">
       <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
-      <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
-        ${ icon('edit') }
+      <button id="edit-project-settings" class="edit-project-settings" type="button">
+        ${ icon('edit') }<span>Edit Project Settings</span>
       </button>
     </div>
     <div id="project-meta-pills" class="project-meta-pills"></div>
@@ -203,9 +203,12 @@ export function mountEditorPanel({ container, callbacks }) {
       { label: tempoLabel(settings.tempo), variant: 'outline' },
     ];
     for (const pill of pills) {
-      const el = document.createElement('span');
+      const el = document.createElement('button');
+      el.type = 'button';
       el.className = `meta-pill meta-pill--${ pill.variant }`;
       el.textContent = pill.label;
+      el.setAttribute('aria-label', `Edit project settings: ${ pill.label }`);
+      el.onclick = () => callbacks.onEditProjectSettings();
       metaPillsEl.append(el);
     }
   }

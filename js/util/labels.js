@@ -35,8 +35,8 @@ export function timeSigLabel(timeSig) {
 
 /**
  * @param {number} tempo  BPM.
- * @returns {string} '♩=88'.
+ * @returns {string} '88 BPM'.
  */
 export function tempoLabel(tempo) {
-    return `♩=${ tempo }`;
+    return `${ tempo } BPM`;
 }
