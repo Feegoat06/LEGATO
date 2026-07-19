@@ -263,7 +263,7 @@ export function validateProgression(raw) {
 
         const s = raw.settings ?? {};
         const settings = makeSettings({
-            tempo: Number.isFinite(s.tempo) && s.tempo >= 30 && s.tempo <= 240 ? s.tempo : 100,
+            tempo: Number.isFinite(s.tempo) && s.tempo >= 1 && s.tempo <= 500 ? s.tempo : 100,
             timeSig: (s.timeSig && Number.isInteger(s.timeSig.num) && s.timeSig.num > 0
                 && Number.isInteger(s.timeSig.den) && [2, 4, 8, 16].includes(s.timeSig.den))
                 ? { num: s.timeSig.num, den: s.timeSig.den } : { num: 4, den: 4 },

@@ -21,6 +21,7 @@ import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { playSegments, stopPlayback } from '../audio/playback.js';
 import { openPianoModal, populateChordControls } from '../ui/piano-modal.js';
+import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
 import { mountTransport } from '../ui/transport.js';
@@ -41,7 +42,7 @@ const AUTOSAVE_DEBOUNCE_MS = 500;
 /**
  * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, exampleProgressionFactory: () => import('../state.js').Progression }} deps
  */
-export function createEditorView({ store, pianoDialog, exampleProgressionFactory }) {
+export function createEditorView({ store, pianoDialog, projectSettingsDialog, exampleProgressionFactory }) {
   return {
     async mount(root, params) {
       const project = await store.getProject(params.id);
@@ -72,25 +73,20 @@ export function createEditorView({ store, pianoDialog, exampleProgressionFactory
       const editor = mountEditorPanel({
         container: shell.querySelector('#editor-pane-mount'),
         callbacks: {
-          onTempoInput(tempo) {
-            progression.settings.tempo = tempo;
-            scheduleAutosave();
-          },
-          onTimeSigChange(timeSig) {
-            progression.settings.timeSig = timeSig;
-            resetIneligibleSeams();
-            coach.setEmpty();
-            rerender();
-          },
-          onKeyChange(key) {
-            progression.settings.key = key;
-            applyKeyToMaterial();
-            coach.setEmpty();
-            rerender();
-          },
-          onClefChange(clef) {
-            progression.settings.clef = clef;
-            rerender();
+          onEditProjectSettings() {
+            openProjectSettingsModal(projectSettingsDialog, {
+              mode: 'edit',
+              initial: {
+                name: currentName,
+                settings: {
+                  tempo: progression.settings.tempo,
+                  timeSig: { ...progression.settings.timeSig },
+                  key: progression.settings.key,
+                  clef: progression.settings.clef,
+                },
+              },
+              onSubmit: ({ name, settings }) => applyProjectSettings({ name, settings }),
+            });
           },
           onAddChord() {
             editingId = null;
@@ -204,6 +200,32 @@ export function createEditorView({ store, pianoDialog, exampleProgressionFactory
           else if (keySourceHints.get(chord.id)) chord.hint = { ...keySourceHints.get(chord.id) };
         });
         resetIneligibleSeams();
+      }
+
+      function applyProjectSettings({ name, settings }) {
+        const previous = progression.settings;
+        const timeSigChanged = previous.timeSig.num !== settings.timeSig.num || previous.timeSig.den !== settings.timeSig.den;
+        const keyChanged = previous.key !== settings.key;
+        const clefChanged = previous.clef !== settings.clef;
+        const nameChanged = currentName !== name;
+
+        currentName = name;
+        progression.settings = {
+          tempo: settings.tempo,
+          timeSig: { ...settings.timeSig },
+          key: settings.key,
+          clef: settings.clef,
+        };
+
+        if (keyChanged) applyKeyToMaterial();
+        if (timeSigChanged) resetIneligibleSeams();
+        if (keyChanged || timeSigChanged || clefChanged) coach.setEmpty();
+
+        if (keyChanged || timeSigChanged || clefChanged || nameChanged) {
+          rerender();
+        } else {
+          scheduleAutosave();
+        }
       }
 
       function resetIneligibleSeams() {
