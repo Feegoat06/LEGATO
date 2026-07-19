@@ -74,7 +74,7 @@ import { compileProgression } from './engine/compile.js';
  * compile()'s output unit: one atomic, fully-resolved, notatable-and-playable event.
  * @typedef {Object} Segment
  * @property {number[]}    notes         Resolved pitches (post voice-leading for techniques).
- * @property {number}      durationBeats One standard note-value (from [4,2,1,0.5,0.25]).
+ * @property {number}      durationBeats One standard note-value (from [4,3,2,1,0.5,0.25]).
  * @property {boolean}     isTechnique   Colour + whether the coach explains it.
  * @property {string}      sourceId      TIES: adjacent segments sharing this get a StaveTie.
  * @property {number|null} seamIndex     Which seam produced it (coach lookup); null for user chords.
@@ -95,7 +95,7 @@ export const TECHNIQUE_IDS = /** @type {const} */ ([
 ]);
 
 /** Greedy decomposition values, largest-first. 0.25 (sixteenth) MUST stay in this list. */
-export const STANDARD_DURATIONS = [4, 2, 1, 0.5, 0.25];
+export const STANDARD_DURATIONS = [4, 3, 2, 1, 0.5, 0.25];
 
 /** Closest-voicing search window (narrower than the 21..108 input range, on purpose). */
 export const VOICING_MIN_MIDI = 40;

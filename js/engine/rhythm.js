@@ -7,8 +7,8 @@
  * the renderer can draw a tie (see DATA-MODEL.md §4).
  */
 
-/** Greedy decomposition values (whole, half, quarter, eighth, sixteenth). */
-export const STANDARD_DURATIONS = [4, 2, 1, 0.5, 0.25];
+/** Greedy decomposition values (whole, dotted half, half, quarter, eighth, sixteenth). */
+export const STANDARD_DURATIONS = [4, 3, 2, 1, 0.5, 0.25];
 
 /**
  * Greedy largest-first decomposition of `duration` (in quarter-beats) into

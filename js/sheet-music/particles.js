@@ -76,6 +76,7 @@ uniform float uBass;
 uniform float uEnergy;
 uniform float uProgress;
 uniform float uScatterT;   // 0 = assembled, 1 = fully scattered
+uniform float uVisibleMeasure; // highest measure that has begun playback
 uniform float uCanvasW;
 uniform float uCanvasH;    // canvas CSS height for y-flip
 uniform float uPixelRatio; // for gl_PointSize
@@ -165,8 +166,15 @@ void main() {
 
   // ── Alpha ────────────────────────────────────────────────────────
   float idleA     = 0.73 + s1 * 0.18 + shimmer * 0.08 * uMotionStrength;
-  float playbackA = 0.18 + assembled * 0.68 + isActive * 0.18;
-  vAlpha = min(1.0, (mix(idleA, playbackA, step(0.01, uScatterT)) + hover * 0.20)
+  // The SVG layer is hidden while this particle reconstruction is active.
+  // Never leave future measures faintly scattered: a displaced flag/stem from
+  // the next system reads as an incorrect stray note. A measure becomes
+  // visible only when audio playback has actually reached it.
+  float measureHasBegun = step(aMeasure, uVisibleMeasure + 0.01);
+  // Preserve the original subtle scatter opacity for a measure that has
+  // started; the gate only suppresses measures that have not started yet.
+  float playbackA = measureHasBegun * (0.18 + assembled * 0.68 + isActive * 0.18);
+  vAlpha = min(1.0, (mix(idleA, playbackA, step(0.01, uScatterT)) + hover * measureHasBegun * 0.20)
            * (0.78 + coverage * 0.22));
 
   // ── Brightness ──────────────────────────────────────────────────
@@ -283,6 +291,7 @@ export function createSheetMusicParticles(canvas) {
   const uEnergy     = { value: 0 };
   const uProgress   = { value: 0 };
   const uScatterT   = { value: 0 };
+  const uVisibleMeasure = { value: -1 };
   const uCanvasW    = { value: 1 };
   const uCanvasH    = { value: 1 };
   const uPixelRatio = { value: renderer.getPixelRatio() };
@@ -295,7 +304,7 @@ export function createSheetMusicParticles(canvas) {
 
   // Main pass (normal blending, tight point size)
   const mainUniforms = {
-    uTime, uBass, uEnergy, uProgress, uScatterT,
+    uTime, uBass, uEnergy, uProgress, uScatterT, uVisibleMeasure,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
     uBloomMult:  { value: 1.0 },
@@ -303,7 +312,7 @@ export function createSheetMusicParticles(canvas) {
 
   // Bloom pass (additive blending, enlarged points for soft halo)
   const bloomUniforms = {
-    uTime, uBass, uEnergy, uProgress, uScatterT,
+    uTime, uBass, uEnergy, uProgress, uScatterT, uVisibleMeasure,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
     uBloomMult:  { value: 2.65 },
@@ -602,6 +611,7 @@ export function createSheetMusicParticles(canvas) {
     mode = 'playback';
     progress = 0;
     activeMeasure = null;
+    uVisibleMeasure.value = -1;
     modeStartedAt = performance.now();
     stage?.classList.remove('is-particle-paused', 'is-particle-settling');
     stage?.classList.add('is-particle-playing');
@@ -614,6 +624,7 @@ export function createSheetMusicParticles(canvas) {
   function setProgress(next, measureIndex = activeMeasure) {
     progress = clamp(next);
     activeMeasure = measureIndex;
+    uVisibleMeasure.value = measureIndex ?? -1;
     stage?.style.setProperty('--sheet-music-progress', `${ (progress * 100).toFixed(2) }%`);
     if (measureIndex != null) setLabel(`Assembling measure ${ measureIndex + 1 }`);
   }
@@ -631,6 +642,7 @@ export function createSheetMusicParticles(canvas) {
     }
     if (preserveProgress) immediate = true;
     progress = 1;
+    uVisibleMeasure.value = Number.MAX_SAFE_INTEGER;
     mode = immediate || rm ? 'idle' : 'settling';
     modeStartedAt = performance.now();
     uScatterT.value = mode === 'idle' ? 0 : uScatterT.value;

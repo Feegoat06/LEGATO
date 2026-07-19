@@ -8,13 +8,15 @@
  *
  * User notes are drawn in `--ivory`; technique-generated notes in `--anchor`
  * (the accent color). Ties are drawn between adjacent segments that share a
- * `sourceId` (see rhythm.js), even across a barline.
+ * `sourceId` (see rhythm.js), even across a barline. When that barline is a
+ * system break, VexFlow's partial-tie form is used for each side; a normal
+ * two-note tie would otherwise draw diagonally through the page.
  */
 import { vexKeyForNote, chordSpellingIdentity } from '../engine/chords.js';
 import { accidentalFor } from '../engine/key-signature.js';
 
 const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
-const DURATIONS = new Map([[4, 'w'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
+const DURATIONS = new Map([[4, 'w'], [3, 'hd'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
 
 /** 'auto' picks bass or treble from the median MIDI note across all segments. */
 function resolvedClef(segments, setting) {
@@ -25,6 +27,38 @@ function resolvedClef(segments, setting) {
 
 function styleModifiers(stave, color) {
   stave.getModifiers().forEach((modifier) => modifier.setStyle({ fillStyle: color, strokeStyle: color }));
+}
+
+/**
+ * Return one VexFlow tie direction for each tied notehead.
+ *
+ * VexFlow's stem constants also describe tie curvature: UP produces a curve
+ * below the noteheads and DOWN produces one above. In a tied chord, the
+ * bottom note curves down, the top note curves up, and inner notes choose the
+ * nearest outside direction. This keeps each arc beside its own notehead and
+ * prevents chord ties from crossing one another.
+ */
+function tieDirections(firstNote, lastNote, count, VF) {
+  if (count === 1) {
+    const firstStem = firstNote.getStemDirection();
+    const lastStem = lastNote.getStemDirection();
+    // When the two ends disagree, conventional single-voice engraving
+    // defaults to an upward curve.
+    return [firstStem === lastStem ? firstStem : VF.StaveNote.STEM_DOWN];
+  }
+
+  const middleLine = 3; // VexFlow's middle staff line.
+  return Array.from({ length: count }, (_, noteIndex) => {
+    if (noteIndex === 0) return VF.StaveNote.STEM_UP; // bottom note: curve down
+    if (noteIndex === count - 1) return VF.StaveNote.STEM_DOWN; // top note: curve up
+
+    // Inner ties go toward the closer outer side. This preserves their
+    // vertical ordering and avoids routing an inner arc across the chord.
+    const line = firstNote.getKeyProps()[noteIndex]?.line ?? middleLine;
+    if (line < middleLine) return VF.StaveNote.STEM_UP;
+    if (line > middleLine) return VF.StaveNote.STEM_DOWN;
+    return firstNote.getStemDirection();
+  });
 }
 
 /**
@@ -93,7 +127,15 @@ export function renderNotation(container, segments, settings, chords = []) {
         clef,
         keys: spelled,
         duration: DURATIONS.get(segment.durationBeats) ?? 'q',
+        // Let VexFlow apply the single-voice engraving rule: below the
+        // middle line stems rise; above it they fall; chords use their outer
+        // noteheads to decide.
+        auto_stem: true,
       });
+      // VexFlow 4 uses the dotted duration (`hd`) for tick accounting, but
+      // requires an explicit Dot modifier to engrave the dot itself. Without
+      // it, a three-beat segment looks like an ordinary two-beat half note.
+      if (segment.durationBeats === 3) VF.Dot.buildAndAttach([staveNote], { all: true });
       spelled.forEach((vex, index) => {
         const accidental = accidentalFor(vex, settings.key);
         if (accidental) staveNote.addModifier(new VF.Accidental(accidental), index);
@@ -118,9 +160,30 @@ export function renderNotation(container, segments, settings, chords = []) {
     const next = notesBySource[index + 1];
     if (current.segment.sourceId !== next.segment.sourceId) continue;
     const count = Math.min(current.note.keys.length, next.note.keys.length);
-    const indices = Array.from({ length: count }, (_, noteIndex) => noteIndex);
-    new VF.StaveTie({ first_note: current.note, last_note: next.note, first_indices: indices, last_indices: indices })
-      .setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+    const directions = tieDirections(current.note, next.note, count, VF);
+
+    const currentRow = Math.floor(current.segment.measureIndex / columns);
+    const nextRow = Math.floor(next.segment.measureIndex / columns);
+    if (currentRow !== nextRow) {
+      // A tie cannot be drawn directly between systems: its endpoints have
+      // different vertical positions. Engraving convention uses an outgoing
+      // fragment at the end of the prior line and an incoming fragment at the
+      // beginning of the next line instead.
+      directions.forEach((direction, noteIndex) => {
+        const indices = [noteIndex];
+        new VF.StaveTie({ first_note: current.note, first_indices: indices, last_indices: indices })
+          .setDirection(direction).setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+        new VF.StaveTie({ last_note: next.note, first_indices: indices, last_indices: indices })
+          .setDirection(direction).setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+      });
+      continue;
+    }
+
+    directions.forEach((direction, noteIndex) => {
+      const indices = [noteIndex];
+      new VF.StaveTie({ first_note: current.note, last_note: next.note, first_indices: indices, last_indices: indices })
+        .setDirection(direction).setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(context).draw();
+    });
   }
   return { measureCount, layout };
 }
