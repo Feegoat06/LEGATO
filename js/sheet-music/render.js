@@ -76,6 +76,9 @@ function tieDirections(firstNote, lastNote, count, VF) {
  */
 export function renderNotation(container, segments, settings, chords = []) {
   const VF = window.Vex?.Flow ?? window.VexFlow;
+  // Rendering may have widened this element for a dense score on a prior
+  // pass. Reset before measuring the available viewport for this pass.
+  container.style.width = '';
   container.replaceChildren();
   if (!VF) {
     container.innerHTML = '<div class="notice">Notation is still loading. Refresh if this message remains.</div>';
@@ -87,14 +90,10 @@ export function renderNotation(container, segments, settings, chords = []) {
   }
 
   const measureCount = Math.max(...segments.map((segment) => segment.measureIndex)) + 1;
-  const width = Math.max(600, container.clientWidth || 820);
-  const staveWidth = Math.max(230, Math.min(360, (width - 36) / Math.min(2, measureCount)));
-  const columns = Math.max(1, Math.floor((width - 20) / staveWidth));
-  const rows = Math.ceil(measureCount / columns);
-  const rowHeight = 150;
-  const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(width, rows * rowHeight + 20);
-  const context = renderer.getContext();
+  // The panel supplies the exact unscaled width for the current button zoom.
+  // A modest floor keeps extremely narrow mobile panes usable without forcing
+  // a desktop-sized SVG that leaves a visual gap at higher zoom levels.
+  const width = Math.max(320, container.clientWidth || 820);
   const clef = resolvedClef(segments, settings.clef);
   const staffColor = '#927a58';
   const lineColor = '#69563f';
@@ -105,22 +104,13 @@ export function renderNotation(container, segments, settings, chords = []) {
   const identityBySourceId = new Map();
   chords.forEach((chord) => identityBySourceId.set(chord.id, chordSpellingIdentity(chord)));
 
-  for (let measure = 0; measure < measureCount; measure += 1) {
-    const column = measure % columns;
-    const row = Math.floor(measure / columns);
-    const x = 10 + column * staveWidth;
-    const y = 16 + row * rowHeight;
-    layout.push({ index: measure, x, width: staveWidth, staffTop: y + 40, lineGap: 10 });
-    context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
-    const stave = new VF.Stave(x, y, staveWidth);
-    if (column === 0) {
-      stave.addClef(clef).addTimeSignature(`${ settings.timeSig.num }/${ settings.timeSig.den }`).addKeySignature(KEY_SIGNATURES[settings.key + 7]);
-    }
-    styleModifiers(stave, staffColor);
-    context.setStrokeStyle(lineColor); context.setFillStyle(lineColor);
-    stave.setStyle({ fillStyle: lineColor, strokeStyle: lineColor }).setContext(context).draw();
+  // Build and measure every voice before assigning staves. Formatter's
+  // minimum width includes accidentals, dots, flags, and chord noteheads, so
+  // a dense bar receives real engraving room instead of being squeezed into
+  // the same width as a whole-note bar.
+  const measures = Array.from({ length: measureCount }, (_, measure) => {
     const measureSegments = segments.filter((segment) => segment.measureIndex === measure);
-    const staveNotes = measureSegments.map((segment) => {
+    const entries = measureSegments.map((segment) => {
       const identity = segment.isTechnique ? null : identityBySourceId.get(segment.sourceId) ?? null;
       const spelled = segment.notes.map((midi) => vexKeyForNote(midi, identity, settings.key));
       const staveNote = new VF.StaveNote({
@@ -144,16 +134,148 @@ export function renderNotation(container, segments, settings, chords = []) {
       staveNote.setStyle({ fillStyle: color, strokeStyle: color });
       staveNote.setLedgerLineStyle?.({ fillStyle: color, strokeStyle: color });
       notesBySource.push({ segment, note: staveNote });
-      return staveNote;
+      return { segment, note: staveNote };
     });
+
+    return { measure, entries };
+  });
+
+  const makeFragment = (measure, entries, startsMeasure, endsMeasure) => {
+    const staveNotes = entries.map((entry) => entry.note);
+    const voice = new VF.Voice({ num_beats: settings.timeSig.num, beat_value: settings.timeSig.den }).setMode(VF.Voice.Mode.SOFT);
+    voice.addTickables(staveNotes);
+    const formatter = new VF.Formatter().joinVoices([voice]);
+    return {
+      measure,
+      entries,
+      staveNotes,
+      voice,
+      formatter,
+      startsMeasure,
+      endsMeasure,
+      minimumWidth: formatter.preCalculateMinTotalWidth([voice]),
+    };
+  };
+
+  // Lay out at note boundaries, not only at barlines. If a dense measure does
+  // not entirely fit at the end of a system, its leading notes use that
+  // remaining room and its unfinished material continues on the next system.
+  // This keeps a zoomed-in score visually continuous instead of leaving an
+  // empty tail and moving the whole bar to a new row.
+  const systemWidth = width - 20;
+  const FIRST_SYSTEM_PREFIX = 126; // clef + time signature + key signature
+  const LATER_SYSTEM_PREFIX = 40;  // left/right breathing room around notes
+  const MIN_STAVE_WIDTH = 230;
+  const MIN_FRAGMENT_WIDTH = 96;
+  const fragmentWidth = (fragment, beginsSystem) => Math.max(
+    fragment.startsMeasure && fragment.endsMeasure ? MIN_STAVE_WIDTH : MIN_FRAGMENT_WIDTH,
+    Math.ceil(fragment.minimumWidth + (beginsSystem ? FIRST_SYSTEM_PREFIX : LATER_SYSTEM_PREFIX)),
+  );
+  const systems = [];
+  let system = [];
+  let occupiedWidth = 0;
+
+  for (const measure of measures) {
+    let entryIndex = 0;
+    while (entryIndex < measure.entries.length) {
+      const beginsSystem = system.length === 0;
+      let best = null;
+
+      // Choose the largest run of consecutive notes that fits the current
+      // system. Segment boundaries are already rhythmic boundaries from the
+      // compiler, so no duration is shortened or dropped by a line break.
+      for (let endIndex = entryIndex + 1; endIndex <= measure.entries.length; endIndex += 1) {
+        const fragment = makeFragment(
+          measure.measure,
+          measure.entries.slice(entryIndex, endIndex),
+          entryIndex === 0,
+          endIndex === measure.entries.length,
+        );
+        const requiredWidth = fragmentWidth(fragment, beginsSystem);
+        if (occupiedWidth + requiredWidth <= systemWidth || (beginsSystem && !best)) {
+          best = { fragment, endIndex, minimumWidth: Math.min(requiredWidth, systemWidth) };
+          continue;
+        }
+        break;
+      }
+
+      if (!best) {
+        systems.push(system);
+        system = [];
+        occupiedWidth = 0;
+        continue;
+      }
+
+      system.push(best);
+      occupiedWidth += best.minimumWidth;
+      entryIndex = best.endIndex;
+
+      // A measure that remains unfinished continues at the beginning of the
+      // next system, where it receives no artificial barline.
+      if (entryIndex < measure.entries.length) {
+        systems.push(system);
+        system = [];
+        occupiedWidth = 0;
+      }
+    }
+  }
+  if (system.length) systems.push(system);
+
+  // Stretch each completed system across the available width. This preserves
+  // readable minimum spacing while avoiding the empty right half of a row
+  // when a single dense bar forces its neighbour to the next line.
+  const placements = [];
+  systems.forEach((row, rowIndex) => {
+    const minimumTotal = row.reduce((total, item) => total + item.minimumWidth, 0);
+    const extraPerMeasure = (systemWidth - minimumTotal) / row.length;
+    let x = 10;
+    row.forEach((item, column) => {
+      const isLast = column === row.length - 1;
+      const staveWidth = isLast ? 10 + systemWidth - x : item.minimumWidth + extraPerMeasure;
+      placements.push({
+        ...item.fragment,
+        column,
+        row: rowIndex,
+        x,
+        staveWidth,
+      });
+      x += staveWidth;
+    });
+  });
+
+  const rows = systems.length;
+  const rowHeight = 150;
+  const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
+  renderer.resize(width, rows * rowHeight + 20);
+  const context = renderer.getContext();
+
+  for (const measureData of placements) {
+    const { measure, staveNotes, voice, formatter, column, row, x, staveWidth, startsMeasure, endsMeasure } = measureData;
+    const y = 16 + row * rowHeight;
+    layout.push({ index: measure, x, width: staveWidth, staffTop: y + 40, lineGap: 10 });
+    context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
+    const stave = new VF.Stave(x, y, staveWidth);
+    if (!startsMeasure) stave.setBegBarType(VF.Barline.type.NONE);
+    if (!endsMeasure) stave.setEndBarType(VF.Barline.type.NONE);
+    if (column === 0) {
+      stave.addClef(clef);
+      // Time signatures introduce the score; they are not repeated merely
+      // because a visual system wrapped while zooming.
+      if (row === 0) stave.addTimeSignature(`${ settings.timeSig.num }/${ settings.timeSig.den }`);
+      stave.addKeySignature(KEY_SIGNATURES[settings.key + 7]);
+    }
+    styleModifiers(stave, staffColor);
+    context.setStrokeStyle(lineColor); context.setFillStyle(lineColor);
+    stave.setStyle({ fillStyle: lineColor, strokeStyle: lineColor }).setContext(context).draw();
     if (staveNotes.length) {
-      const voice = new VF.Voice({ num_beats: settings.timeSig.num, beat_value: settings.timeSig.den }).setMode(VF.Voice.Mode.SOFT);
-      voice.addTickables(staveNotes);
-      new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - (column === 0 ? 120 : 32));
+      formatter.format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
     }
     context.closeGroup();
   }
+
+  const rowByNote = new Map();
+  placements.forEach(({ row, entries }) => entries.forEach(({ note }) => rowByNote.set(note, row)));
 
   for (let index = 0; index < notesBySource.length - 1; index += 1) {
     const current = notesBySource[index];
@@ -162,8 +284,8 @@ export function renderNotation(container, segments, settings, chords = []) {
     const count = Math.min(current.note.keys.length, next.note.keys.length);
     const directions = tieDirections(current.note, next.note, count, VF);
 
-    const currentRow = Math.floor(current.segment.measureIndex / columns);
-    const nextRow = Math.floor(next.segment.measureIndex / columns);
+    const currentRow = rowByNote.get(current.note);
+    const nextRow = rowByNote.get(next.note);
     if (currentRow !== nextRow) {
       // A tie cannot be drawn directly between systems: its endpoints have
       // different vertical positions. Engraving convention uses an outgoing
