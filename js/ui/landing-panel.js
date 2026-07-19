@@ -161,9 +161,10 @@ function emptyMessage(kind) {
  */
 function applyCardTheme(card, project) {
   const theme = project.progression?.settings?.theme;
-  if (!theme) return;
-  if (theme.accent) card.style.setProperty('--card-accent', theme.accent);
-  if (theme.chordFont) card.dataset.chordFont = theme.chordFont;
+  if (theme?.accent) card.style.setProperty('--card-accent', theme.accent);
+  const chordFont = theme?.chordFont?.toLowerCase() === 'classical' ? 'classical' : 'jazztext';
+  card.dataset.chordFont = chordFont;
+  card.classList.toggle('is-classical-project', chordFont === 'classical');
 }
 
 function iconButton({ icon: iconName, label, action, dangerous = false }) {

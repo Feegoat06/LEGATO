@@ -274,8 +274,8 @@
     border: 1px solid var(--hairline);
     border-radius: var(--radius-chord);
     border-left: 3px solid var(--accent);
-    padding: 20px;
-    min-height: 138px;
+    padding: 24px;
+    min-height: 168px;
     transition: border-color .15s ease, transform .15s ease
 }
 
@@ -293,6 +293,14 @@
     --font-chord: var(--font-chord-classical);
     --font-chord-style: normal;
     --font-chord-weight: 700
+}
+
+/* Landing cards can show both font modes at once, independent of the
+   document-level theme that was active in the last-opened project. */
+.landing-card.is-classical-project .landing-card-name {
+    font-family: var(--font-chord-classical);
+    font-style: normal;
+    font-weight: 700
 }
 
 .landing-card-body {
@@ -355,8 +363,15 @@
 
 .landing-card-recent .landing-card-actions {
     position: absolute;
-    right: 16px;
-    bottom: 16px;
+    right: 10px;
+    bottom: 10px;
+    padding: 6px;
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--hairline));
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--panel-2) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .26);
     margin: 0;
     opacity: 0;
     pointer-events: none;
