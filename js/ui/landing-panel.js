@@ -19,7 +19,7 @@ const TEMPLATE = `
 <div class="landing-shell">
   <header class="landing-header">
     <div class="landing-brand">
-      <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <img class="brand-mark" src="/assets/brand/legato-icon.png" alt="" draggable="false">
       <span class="brand">LEGATO</span>
     </div>
     <span class="landing-tagline"><a class="landing-github-link" href="https://github.com/Feegoat06/OpenAI_Build_Week_Project" target="_blank" rel="noopener noreferrer" aria-label="Open the LEGATO GitHub repository">${ icon('github') }</a><span>Created with ♥ and ♫ from Fee, Louie, and Eric</span></span>

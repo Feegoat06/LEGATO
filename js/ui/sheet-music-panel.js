@@ -8,17 +8,23 @@
  * externally (via project settings), the override is cleared so the panel
  * reflects the new source of truth.
  *
- * The transport controls are mounted into this panel through the exposed
- * `transportMount` reference so editor-view can wire them separately.
+ * The transport and Tutor drawer are siblings inside <main class="sheet-
+ * music-pane">; this module exposes their mount points for editor-view.
  */
 import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
+import { mountTenutino } from './tenutino.js';
 import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
 import { icon } from './icons.js';
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.5;
 const ZOOM_STEP = 0.1;
+// Continuous wheel zoom. One wheel notch (~100 units of deltaY on most mice
+// under DOM_DELTA_PIXEL) moves the zoom ~2%, so five notches = one 10% step.
+const WHEEL_ZOOM_FACTOR = 0.0005;
+const WHEEL_DELTA_LINE_PX = 16;
+const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
 <section class="notation-stage" aria-label="Progression notation">
@@ -56,6 +62,7 @@ const TEMPLATE = `
     </label>
   </div>
 </div>
+<div id="tutor-chat-mount"></div>
 `;
 
 export function mountSheetMusicPanel({ container, callbacks = {} }) {
@@ -67,8 +74,18 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const zoomOutBtn = container.querySelector('#sheet-music-zoom-out');
   const zoomInBtn = container.querySelector('#sheet-music-zoom-in');
   const layerEl = container.querySelector('#sheet-music-layer');
+  const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
+  const tenutino = mountTenutino({
+    container: layerEl,
+    scrollContainer: notationStageEl,
+    callbacks: {
+      explain: (context) => callbacks.onTenutinoExplain?.(context),
+      suggest: (context) => callbacks.onTenutinoSuggest?.(context),
+      ask: (context) => callbacks.onTenutinoAsk?.(context),
+    },
+  });
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
   const tempoInputEl = container.querySelector('#sheet-music-tempo-input');
   const clefSelectEl = container.querySelector('#sheet-music-clef');
@@ -102,6 +119,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     if (!effectiveSettings) return { measureCount: 0, layout: [] };
     const result = renderNotation(sheetMusicEl, currentSegments, effectiveSettings, currentChords);
     particles.setSheetMusic(sheetMusicEl.querySelector('svg'), result.layout);
+    tenutino.setLayout(result.layout);
     applyActiveMeasureClasses();
     return result;
   }
@@ -112,7 +130,10 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   }
 
   function clampZoom(value) {
-    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
+    // Fine 0.1% precision so trackpad microdeltas accumulate visibly. The
+    // displayed readout still rounds to integer percent, and the +/- buttons
+    // move by 0.1, so both interactions read as clean 10% marks.
+    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 1000) / 1000));
   }
 
   function setZoom(nextZoom) {
@@ -123,6 +144,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     // the next line instead of compressing either bar's notation.
     layerEl.style.zoom = String(zoom);
     zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
+    tenutino.setZoom(zoom);
     zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
     zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
     // CSS `zoom` already changes this element's layout coordinate space. Keep
@@ -135,6 +157,21 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
 
   zoomOutBtn.onclick = () => setZoom(zoom - ZOOM_STEP);
   zoomInBtn.onclick = () => setZoom(zoom + ZOOM_STEP);
+
+  // Wheel-to-zoom. Every event moves the zoom immediately (responsive),
+  // but by a small fraction of the deltaY so a single mouse-wheel notch
+  // is a 2% nudge rather than the old 10% jump. Trackpad users get finer
+  // deltas and correspondingly smoother motion.
+  function normalizeWheelDelta(event) {
+    if (event.deltaMode === 1) return event.deltaY * WHEEL_DELTA_LINE_PX;
+    if (event.deltaMode === 2) return event.deltaY * WHEEL_DELTA_PAGE_PX;
+    return event.deltaY;
+  }
+  notationStageEl.addEventListener('wheel', (event) => {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    setZoom(zoom - normalizeWheelDelta(event) * WHEEL_ZOOM_FACTOR);
+  }, { passive: false });
 
   window.addEventListener('resize', scheduleRerender);
   const panelResizeObserver = typeof ResizeObserver === 'undefined'
@@ -182,7 +219,9 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
 
   return {
     transportMount: container.querySelector('#transport-mount'),
+    tutorChatMount: container.querySelector('#tutor-chat-mount'),
     particles,
+    tenutino,
     render(segments, settings, chords = []) {
       currentSegments = segments;
       currentChords = chords;

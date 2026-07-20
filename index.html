@@ -8,6 +8,13 @@
     content="LEGATO is an interactive AI music tutor for composing, hearing, and understanding chord transitions.">
   <title>LEGATO — Progression Coach</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <script>
+    // Mark reloads before the first paint so the startup overture never
+    // flashes when the user refreshes the current page.
+    if (performance.getEntriesByType('navigation')[0]?.type === 'reload') {
+      document.documentElement.dataset.legatoNavigation = 'reload';
+    }
+  </script>
 </head>
 
 <body>
@@ -16,7 +23,51 @@
     #app-root based on the hash route. The piano modal is mounted once and
     reused by the editor across sessions.
   -->
-  <div id="app-root"></div>
+  <div id="app-root">
+    <section class="startup-splash" role="status" aria-live="polite" aria-label="LEGATO is loading">
+      <header class="startup-splash-header">
+        <div class="startup-splash-brand">
+          <img src="/assets/brand/legato-icon.png" alt="" draggable="false">
+          <span>LEGATO</span>
+        </div>
+        <span class="startup-splash-workspace">Composition workspace</span>
+      </header>
+
+      <div class="startup-splash-content">
+        <img class="startup-splash-tenutino" src="/assets/tenutino/tenutino.png" alt="" draggable="false">
+        <p id="startup-splash-message" class="startup-splash-message">Take your time. We&rsquo;ll find the way forward.</p>
+        <p class="startup-splash-status">Preparing your composition workspace&hellip;</p>
+
+        <div class="startup-splash-score-stage" data-particle-stage aria-hidden="true">
+          <svg class="startup-splash-score" viewBox="0 0 920 76" style="color: #d1a15a">
+            <g class="startup-splash-staff" fill="none" stroke="#d1a15a" stroke-width="1.5" opacity="0.55">
+              <path d="M18 20H902M18 29H902M18 38H902M18 47H902M18 56H902" />
+              <path d="M18 15V61M902 15V61" />
+            </g>
+            <g class="startup-splash-chord startup-splash-chord-start" fill="#d1a15a" stroke="#d1a15a" stroke-width="1.2">
+              <ellipse cx="47" cy="29" rx="6" ry="4" />
+              <ellipse cx="47" cy="38" rx="6" ry="4" />
+              <ellipse cx="47" cy="47" rx="6" ry="4" />
+              <path d="M53 29V12" />
+            </g>
+            <g class="startup-splash-passing-notes" fill="#d1a15a" stroke="#d1a15a" stroke-width="1.2" opacity="0.9">
+              <ellipse cx="215" cy="45" rx="5" ry="3.5" /><path d="M220 45V29" />
+              <ellipse cx="370" cy="38" rx="5" ry="3.5" /><path d="M375 38V22" />
+              <ellipse cx="525" cy="31" rx="5" ry="3.5" /><path d="M530 31V15" />
+              <ellipse cx="680" cy="38" rx="5" ry="3.5" /><path d="M685 38V22" />
+            </g>
+            <g class="startup-splash-chord startup-splash-chord-end" fill="#d1a15a" stroke="#d1a15a" stroke-width="1.2" opacity="0.82">
+              <ellipse cx="873" cy="29" rx="6" ry="4" />
+              <ellipse cx="873" cy="38" rx="6" ry="4" />
+              <ellipse cx="873" cy="47" rx="6" ry="4" />
+              <path d="M879 29V12" />
+            </g>
+          </svg>
+          <canvas class="startup-splash-particles" aria-hidden="true"></canvas>
+        </div>
+      </div>
+    </section>
+  </div>
   <div id="piano-modal-mount"></div>
   <div id="project-settings-modal-mount"></div>
 

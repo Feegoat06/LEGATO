@@ -223,6 +223,14 @@
     opacity: 0
 }
 
+/* During playback, retain a very faint vector scaffold beneath the particle
+   reconstruction. Staff structure and system-opening clefs never pop out of
+   complete darkness, while particles remain the dominant visual layer. */
+.notation-stage.has-full-particles.is-particle-playing .sheet-music svg,
+.notation-stage.has-full-particles.is-particle-paused .sheet-music svg {
+    opacity: .09
+}
+
 .sheet-music .notice {
     color: var(--tan-dim);
     font: italic 500 var(--fs-copy) var(--font-body);

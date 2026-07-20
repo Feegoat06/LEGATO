@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coalesceTiedSegments, stopPlayback } from '../js/audio/playback.js';
+import {
+  coalesceTiedSegments,
+  playbackPositionAt,
+  stopPlayback,
+} from '../js/audio/playback.js';
 
 test('tied notation fragments schedule as one sustained playback event', () => {
   const events = coalesceTiedSegments([
@@ -19,6 +23,22 @@ test('distinct source material still starts a new playback event', () => {
     { notes: [60], durationBeats: 1, sourceId: 's0-0', measureIndex: 0, startBeat: 1 },
   ], 4);
   assert.equal(events.length, 2);
+});
+
+test('measure progress comes directly from audio time when the last measure is partial', () => {
+  const measureDuration = 2;
+  const totalDuration = 5; // Two complete measures plus half of the third.
+
+  assert.deepEqual(playbackPositionAt(2, totalDuration, measureDuration), {
+    globalProgress: 0.4,
+    measureIndex: 1,
+    measureProgress: 0,
+  });
+  assert.deepEqual(playbackPositionAt(4.5, totalDuration, measureDuration), {
+    globalProgress: 0.9,
+    measureIndex: 2,
+    measureProgress: 0.25,
+  });
 });
 
 test('stopPlayback cancels future audio events on the Tone transport', () => {

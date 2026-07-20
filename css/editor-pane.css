@@ -24,22 +24,12 @@
    glyph inside is ink-colored — reads as a chip that inverts against the
    theme. Same treatment reused for the landing brand. */
 .brand-mark {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-    background: var(--accent);
-    color: var(--ink);
-    font: 700 .95rem var(--font-body)
-}
-
-.brand-mark::before {
-    content: 'L'
-}
-
-.brand-mark span {
-    display: none
+    display: block;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    user-select: none
 }
 
 .brand {
@@ -864,5 +854,8 @@
 @media(max-width:650px) {
     .chord-row {
         grid-template-columns: 1fr 48px 28px
+    }
+    .edit-project-settings span {
+        display: none
     }
 }

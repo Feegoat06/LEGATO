@@ -18,9 +18,65 @@ const DESKTOP_PARTICLES = 48000;
 const COMPACT_PARTICLES = 20000;
 const MAX_DPR           = 3;
 const GOLD              = [209, 161, 90];
+const SAMPLE_CACHE_LIMIT = 3;
+
+// Central diagnostic switch. Keep this available so particle rendering can be
+// isolated again during profiling without changing the score or Tenutino.
+export const PARTICLE_EFFECTS_ENABLED = true;
 
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
 const ease  = (t) => 1 - (1 - clamp(t)) ** 3;
+
+/** Use the same musical coordinate as Tenutino: measure + progress in it. */
+export function particlePlayhead(measureIndex, measureProgress, layoutLength, globalProgress = 0) {
+  if (Number.isInteger(measureIndex) && measureIndex >= 0) {
+    return measureIndex + clamp(Number(measureProgress) || 0);
+  }
+  return clamp(Number(globalProgress) || 0) * Math.max(0, Number(layoutLength) || 0);
+}
+
+/**
+ * Convert an engraved X position into musical progress using actual note
+ * onsets. The system preamble (clef/key/time signature) clamps to the first
+ * note's onset, so it never pushes that sounding note later in the timeline.
+ */
+export function musicalProgressAtX(measure, x, snapPx = 14) {
+  const start = Number(measure?.x) || 0;
+  const width = Math.max(1, Number(measure?.width) || 1);
+  const target = Number(x) || 0;
+  const fallback = () => clamp((target - start) / width);
+  const anchors = measure?.timelineAnchors;
+  if (!Array.isArray(anchors) || !anchors.length) return fallback();
+
+  const first = anchors[0];
+  const last = anchors[anchors.length - 1];
+  if (!Number.isFinite(first?.x) || !Number.isFinite(first?.progress)
+    || !Number.isFinite(last?.x) || !Number.isFinite(last?.progress)) return fallback();
+
+  const snap = Math.max(0, Number(snapPx) || 0);
+  if (target <= first.x + snap) return clamp(first.progress);
+
+  for (let index = 0; index < anchors.length - 1; index += 1) {
+    const left = anchors[index];
+    const right = anchors[index + 1];
+    if (![left.x, left.progress, right.x, right.progress].every(Number.isFinite)) continue;
+    if (Math.abs(target - right.x) <= snap) return clamp(right.progress);
+    if (target < right.x - snap) {
+      const fromX = left.x + snap;
+      const toX = right.x - snap;
+      if (target <= fromX || toX <= fromX) return clamp(left.progress);
+      const ratio = clamp((target - fromX) / (toX - fromX));
+      return clamp(left.progress + (right.progress - left.progress) * ratio);
+    }
+  }
+
+  if (target <= last.x + snap) return clamp(last.progress);
+  const fromX = last.x + snap;
+  const toX = start + width;
+  if (toX <= fromX) return clamp(last.progress);
+  const ratio = clamp((target - fromX) / (toX - fromX));
+  return clamp(last.progress + (1 - last.progress) * ratio);
+}
 
 /* ── GLSL ────────────────────────────────────────────────────────── */
 
@@ -77,9 +133,8 @@ ${SIMPLEX}
 uniform float uTime;
 uniform float uBass;
 uniform float uEnergy;
-uniform float uProgress;
+uniform float uPlayhead;  // measure index + within-measure progress
 uniform float uScatterT;   // 0 = assembled, 1 = fully scattered
-uniform float uVisibleMeasure; // highest measure that has begun playback
 uniform float uCanvasW;
 uniform float uCanvasH;    // canvas CSS height for y-flip
 uniform float uPixelRatio; // for gl_PointSize
@@ -90,7 +145,7 @@ uniform float uPointerRadius;
 uniform vec2  uPointer;
 
 attribute float aSeed;
-attribute float aOrder;
+attribute float aTimeline;
 attribute float aMeasure;
 attribute float aCoverage;
 attribute vec3  aCol;
@@ -138,8 +193,11 @@ void main() {
             + cos(uTime * 0.044 + s2 * 6.2832) * 12.0;
 
   // ── Assembly progress for this individual particle ────────────────
-  float dist      = uProgress - aOrder;
-  float assembled = clamp(dist / 0.018 + 0.5, 0.0, 1.0);
+  // A tiny stable delay prevents dense clefs, accidentals, and vertical chord
+  // clusters from changing opacity in one frame while preserving one gesture.
+  float particleDelay = (s1 - 0.5) * 0.012;
+  float dist      = uPlayhead - aTimeline - particleDelay;
+  float assembled = smoothstep(-0.018, 0.018, dist);
 
   // scatter only applies to unbuilt portion
   float effScatter = uScatterT * (1.0 - assembled);
@@ -169,15 +227,12 @@ void main() {
 
   // ── Alpha ────────────────────────────────────────────────────────
   float idleA     = 0.73 + s1 * 0.18 + shimmer * 0.08 * uMotionStrength;
-  // The SVG layer is hidden while this particle reconstruction is active.
-  // Never leave future measures faintly scattered: a displaced flag/stem from
-  // the next system reads as an incorrect stray note. A measure becomes
-  // visible only when audio playback has actually reached it.
-  float measureHasBegun = step(aMeasure, uVisibleMeasure + 0.01);
-  // Preserve the original subtle scatter opacity for a measure that has
-  // started; the gate only suppresses measures that have not started yet.
-  float playbackA = measureHasBegun * (0.18 + assembled * 0.68 + isActive * 0.18);
-  vAlpha = min(1.0, (mix(idleA, playbackA, step(0.01, uScatterT)) + hover * measureHasBegun * 0.20)
+  // Reveal against the continuous musical playhead instead of opening an
+  // entire measure with an integer step. Future notation remains invisible,
+  // but the frontier fades in over a narrow, tempo-relative window.
+  float reveal = smoothstep(-0.032, 0.014, dist);
+  float playbackA = reveal * (0.08 + assembled * 0.76 + isActive * 0.18);
+  vAlpha = min(1.0, (mix(idleA, playbackA, step(0.01, uScatterT)) + hover * reveal * 0.20)
            * (0.78 + coverage * 0.22));
 
   // ── Brightness ──────────────────────────────────────────────────
@@ -251,13 +306,49 @@ function makeDotTexture(T) {
 
 /* ── Main export ────────────────────────────────────────────────── */
 export function createSheetMusicParticles(canvas) {
+  if (!PARTICLE_EFFECTS_ENABLED) {
+    const stage = canvas.closest('[data-particle-stage], .notation-stage');
+    canvas.hidden = true;
+    stage?.classList.remove(
+      'has-full-particles',
+      'is-particle-playing',
+      'is-particle-paused',
+      'is-particle-settling',
+    );
+
+    return {
+      setSheetMusic() {
+        // Without `has-full-particles`, the original vector SVG remains
+        // visible and crisp. No rasterization or particle geometry is built.
+        stage?.classList.remove('has-full-particles');
+        return Promise.resolve(false);
+      },
+      ready() { return Promise.resolve(false); },
+      beginPlayback() {
+        stage?.style.setProperty('--sheet-music-progress', '0%');
+      },
+      setProgress(next) {
+        const progress = clamp(Number(next) || 0);
+        stage?.style.setProperty('--sheet-music-progress', `${ (progress * 100).toFixed(2) }%`);
+      },
+      settle() {
+        stage?.style.setProperty('--sheet-music-progress', '0%');
+      },
+      destroy() {},
+    };
+  }
+
   const T = window.THREE;
   if (!T) {
     console.warn('[particles] Three.js not available — visual disabled.');
-    return { setSheetMusic() {}, beginPlayback() {}, setProgress() {}, settle() {} };
+    return {
+      setSheetMusic() { return Promise.resolve(false); },
+      ready() { return Promise.resolve(false); },
+      beginPlayback() {}, setProgress() {}, settle() {}, destroy() {},
+    };
   }
 
-  const stage   = canvas.closest('.notation-stage');
+  const stage   = canvas.closest('[data-particle-stage], .notation-stage');
   const stateEl = stage?.querySelector('#sheet-music-fx-state');
   const mq      = window.matchMedia('(prefers-reduced-motion: reduce)');
   let   rm      = mq.matches;
@@ -292,9 +383,8 @@ export function createSheetMusicParticles(canvas) {
   const uTime       = { value: 0 };
   const uBass       = { value: 0 };
   const uEnergy     = { value: 0 };
-  const uProgress   = { value: 0 };
+  const uPlayhead   = { value: 0 };
   const uScatterT   = { value: 0 };
-  const uVisibleMeasure = { value: -1 };
   const uCanvasW    = { value: 1 };
   const uCanvasH    = { value: 1 };
   const uPixelRatio = { value: renderer.getPixelRatio() };
@@ -307,7 +397,7 @@ export function createSheetMusicParticles(canvas) {
 
   // Main pass (normal blending, tight point size)
   const mainUniforms = {
-    uTime, uBass, uEnergy, uProgress, uScatterT, uVisibleMeasure,
+    uTime, uBass, uEnergy, uPlayhead, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
     uBloomMult:  { value: 1.0 },
@@ -315,7 +405,7 @@ export function createSheetMusicParticles(canvas) {
 
   // Bloom pass (additive blending, enlarged points for soft halo)
   const bloomUniforms = {
-    uTime, uBass, uEnergy, uProgress, uScatterT, uVisibleMeasure,
+    uTime, uBass, uEnergy, uPlayhead, uScatterT,
     uCanvasW, uCanvasH, uPixelRatio, uDotTex,
     uMotionStrength, uPointerActive, uPointerRadius, uPointer, uColorBoost,
     uBloomMult:  { value: 1.85 },
@@ -365,11 +455,16 @@ export function createSheetMusicParticles(canvas) {
   let mode          = 'idle';
   let progress      = 0;
   let activeMeasure = null;
+  let activeMeasureProgress = 0;
   let modeStartedAt = performance.now();
   let layout        = [];
   let sampleGen     = 0;
+  let readyPromise  = Promise.resolve(false);
+  let pendingSample = null;
+  const sampleCache = new Map();
   let frameId       = 0;
   let lastT         = performance.now();
+  let destroyed     = false;
 
   /* ── Audio analysis via Tone.Analyser ──────────────────────────── */
   let toneAnalyser = null;
@@ -405,8 +500,8 @@ export function createSheetMusicParticles(canvas) {
   /* ── Geometry builders ─────────────────────────────────────────── */
   const seededR = (v) => { const r = Math.sin(v * 12.9898 + 78.233) * 43758.5453; return r - Math.floor(r); };
 
-  function nearestM(x, y) {
-    return layout.reduce((best, m) => {
+  function nearestM(x, y, sourceLayout = layout) {
+    return sourceLayout.reduce((best, m) => {
       const hd = x < m.x ? m.x - x : Math.max(0, x - m.x - m.width);
       const d  = hd * 2 + Math.abs(y - (m.staffTop + 20));
       return !best || d < best.d ? { m, d } : best;
@@ -417,7 +512,7 @@ export function createSheetMusicParticles(canvas) {
     const n  = list.length;
     const pa = new Float32Array(n * 3);
     const sa = new Float32Array(n);
-    const oa = new Float32Array(n);
+    const ta = new Float32Array(n);
     const ma = new Float32Array(n);
     const qa = new Float32Array(n);
     const ca = new Float32Array(n * 3);
@@ -427,7 +522,7 @@ export function createSheetMusicParticles(canvas) {
       pa[i * 3 + 1] = p.y; // raw pixel y (0 = top); flipped in shader via uCanvasH
       pa[i * 3 + 2] = 0;
       sa[i]     = p.seed;
-      oa[i]     = p.order;
+      ta[i]     = p.timeline;
       ma[i]     = p.measure;
       qa[i]     = p.coverage ?? 1;
       ca[i * 3]     = p.color[0] / 255;
@@ -435,17 +530,16 @@ export function createSheetMusicParticles(canvas) {
       ca[i * 3 + 2] = p.color[2] / 255;
     });
 
-    if (geo)  geo.dispose();
+    if (pts) scene.remove(pts);
+    if (bPts) scene.remove(bPts);
+    geo?.dispose();
     geo = new T.BufferGeometry();
     geo.setAttribute('position', new T.BufferAttribute(pa, 3));
     geo.setAttribute('aSeed',    new T.BufferAttribute(sa, 1));
-    geo.setAttribute('aOrder',   new T.BufferAttribute(oa, 1));
+    geo.setAttribute('aTimeline', new T.BufferAttribute(ta, 1));
     geo.setAttribute('aMeasure', new T.BufferAttribute(ma, 1));
     geo.setAttribute('aCoverage', new T.BufferAttribute(qa, 1));
     geo.setAttribute('aCol',     new T.BufferAttribute(ca, 3));
-
-    if (pts)  { scene.remove(pts);  pts.geometry.dispose(); }
-    if (bPts) { scene.remove(bPts); bPts.geometry.dispose(); }
 
     // Bloom renders first (behind), main pass on top
     bPts = new T.Points(geo, bloomMat);
@@ -458,20 +552,23 @@ export function createSheetMusicParticles(canvas) {
     scene.add(pts);
   }
 
-  function buildFallback() {
+  function buildFallback(nextLayout = layout) {
+    layout = nextLayout;
     const sp   = Math.max(4, layout.reduce((s, m) => s + m.width * 5, 0) / 1800);
     const list = [];
     layout.forEach((m) => {
       const cnt = Math.max(2, Math.floor(m.width / sp));
       for (let line = 0; line < 5; line++) {
         for (let k = 0; k <= cnt; k++) {
-          const lp   = k / cnt;
+          const visualProgress = k / cnt;
+          const x = m.x + visualProgress * m.width;
+          const musicalProgress = musicalProgressAtX(m, x);
           const seed = m.index * 997 + line * 173 + k * 11;
           list.push({
-            x: m.x + lp * m.width,
+            x,
             y: m.staffTop + line * m.lineGap,
             color: GOLD, seed,
-            order:   (m.index + lp) / Math.max(1, layout.length),
+            timeline: m.index + musicalProgress,
             measure: m.index,
             coverage: 1,
           });
@@ -481,7 +578,7 @@ export function createSheetMusicParticles(canvas) {
     buildGeo(list);
   }
 
-  function samplePx(imgData, w, h, sp, scale = 1) {
+  function samplePx(imgData, w, h, sp, scale = 1, sourceLayout = layout) {
     const px = imgData.data;
     const list = [];
     for (let cy = 0; cy < h; cy += sp) {
@@ -499,16 +596,16 @@ export function createSheetMusicParticles(canvas) {
         const rasterY = Math.floor(pi / w);
         const x = rasterX / scale;
         const y = rasterY / scale;
-        const m  = nearestM(x, y);
+        const m  = nearestM(x, y, sourceLayout);
         if (!m) continue;
-        const lp   = clamp((x - m.x) / m.width);
+        const lp   = musicalProgressAtX(m, x);
         const seed = m.index * 997 + Math.round(x) * 17 + Math.round(y) * 31 + list.length;
         list.push({
           x, y,
           color: [px[bestOff], px[bestOff + 1], px[bestOff + 2]]
             .map((c) => Math.min(255, Math.round(c * 1.18 + 12))),
           seed,
-          order:   (m.index + lp) / Math.max(1, layout.length),
+          timeline: m.index + lp,
           measure: m.index,
           coverage: bestA / 255,
         });
@@ -517,18 +614,29 @@ export function createSheetMusicParticles(canvas) {
     return list;
   }
 
-  async function sampleSvg(svg, gen) {
+  async function sampleSvg(svg, gen, nextLayout) {
     const par = canvas.parentElement;
-    if (!svg || !par) return false;
+    if (!svg || !par) return null;
     const w = Math.max(1, Math.round(par.clientWidth));
     const h = Math.max(1, Math.round(par.clientHeight));
+    const markup = new XMLSerializer().serializeToString(svg);
+    const timelineKey = nextLayout.map((measure) => (measure.timelineAnchors ?? [])
+      .map((anchor) => `${Number(anchor.x).toFixed(2)},${Number(anchor.progress).toFixed(4)}`)
+      .join(';')).join('|');
+    const cacheKey = `${w}x${h}:${compact ? 'compact' : 'desktop'}:${timelineKey}:${markup}`;
+    if (sampleCache.has(cacheKey)) {
+      const cached = sampleCache.get(cacheKey);
+      sampleCache.delete(cacheKey);
+      sampleCache.set(cacheKey, cached);
+      return { list: cached, layout: nextLayout };
+    }
     const url = URL.createObjectURL(
-      new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' }),
+      new Blob([markup], { type: 'image/svg+xml' }),
     );
     const img = new Image();
     try {
       await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; });
-      if (gen !== sampleGen) return false;
+      if (gen !== sampleGen) return null;
       // Rasterize above CSS resolution before selecting points. This gives
       // thin glyph details several candidate pixels instead of letting a
       // single low-resolution sample erase a stem, beam, or accidental.
@@ -542,22 +650,41 @@ export function createSheetMusicParticles(canvas) {
       rctx.drawImage(img, 0, 0, rasterW, rasterH);
       const data = rctx.getImageData(0, 0, rasterW, rasterH);
       let sp = sampleStep;
-      let list = samplePx(data, rasterW, rasterH, sp, sampleScale);
+      let list = samplePx(data, rasterW, rasterH, sp, sampleScale, nextLayout);
       while (list.length > particleCap && sp < 10) {
         sp++;
-        list = samplePx(data, rasterW, rasterH, sp, sampleScale);
+        list = samplePx(data, rasterW, rasterH, sp, sampleScale, nextLayout);
       }
-      if (gen !== sampleGen || !list.length) return false;
-      buildGeo(list.slice(0, particleCap));
-      stage?.classList.add('has-full-particles');
-      return true;
+      if (gen !== sampleGen || !list.length) return null;
+      const sampled = list.slice(0, particleCap);
+      sampleCache.set(cacheKey, sampled);
+      while (sampleCache.size > SAMPLE_CACHE_LIMIT) {
+        sampleCache.delete(sampleCache.keys().next().value);
+      }
+      return { list: sampled, layout: nextLayout };
     } finally {
       URL.revokeObjectURL(url);
     }
   }
 
+  function commitSample(sample) {
+    if (!sample) return false;
+    layout = sample.layout;
+    buildGeo(sample.list);
+    stage?.classList.add('has-full-particles');
+    return true;
+  }
+
+  function applyPendingSample() {
+    if (!pendingSample || pendingSample.gen !== sampleGen) return false;
+    const sample = pendingSample.sample;
+    pendingSample = null;
+    return commitSample(sample);
+  }
+
   /* ── Render loop ───────────────────────────────────────────────── */
   function loop(now) {
+    if (destroyed) return;
     frameId = requestAnimationFrame(loop);
 
     const dt = Math.min((now - lastT) / 1000, 0.05);
@@ -570,7 +697,12 @@ export function createSheetMusicParticles(canvas) {
     uTime.value     += dt;
     uBass.value      = bass;
     uEnergy.value    = energy;
-    uProgress.value  = progress;
+    uPlayhead.value  = particlePlayhead(
+      activeMeasure,
+      activeMeasureProgress,
+      layout.length,
+      progress,
+    );
 
     const elapsed = now - modeStartedAt;
     if (mode === 'idle') {
@@ -588,40 +720,69 @@ export function createSheetMusicParticles(canvas) {
         stage?.classList.remove('is-particle-playing', 'is-particle-paused', 'is-particle-settling');
         stage?.style.setProperty('--sheet-music-progress', '0%');
         setLabel('Sheet music breathing');
+        applyPendingSample();
       }
     }
 
     renderer.render(scene, camera);
   }
 
-  function ensureLoop() { if (!frameId) frameId = requestAnimationFrame(loop); }
+  function ensureLoop() { if (!destroyed && !frameId) frameId = requestAnimationFrame(loop); }
   function setLabel(v)  { if (stateEl) stateEl.textContent = v; }
 
   /* ── Public API (identical surface to old Canvas 2D version) ───── */
   function setSheetMusic(svg, nextLayout) {
     sampleGen++;
     const gen = sampleGen;
-    layout = nextLayout;
     syncCamera();
-    if (!svg || !layout.length) {
+    if (!svg || !nextLayout.length) {
+      pendingSample = null;
       stage?.classList.remove('has-full-particles');
-      buildFallback();
+      buildFallback(nextLayout);
       ensureLoop();
-      return;
+      readyPromise = Promise.resolve(false);
+      return readyPromise;
     }
-    if (!stage?.classList.contains('has-full-particles')) buildFallback();
+    if (!stage?.classList.contains('has-full-particles')) buildFallback(nextLayout);
     ensureLoop();
-    sampleSvg(svg, gen)
-      .then((ok) => { if (!ok && gen === sampleGen) { stage?.classList.remove('has-full-particles'); buildFallback(); } })
-      .catch(()  => { if (gen === sampleGen)        { stage?.classList.remove('has-full-particles'); buildFallback(); } });
+    readyPromise = sampleSvg(svg, gen, nextLayout)
+      .then((sample) => {
+        if (gen !== sampleGen) return false;
+        if (!sample) {
+          if (!stage?.classList.contains('has-full-particles')) buildFallback(nextLayout);
+          return false;
+        }
+        // Replacing a large GPU buffer in the middle of playback causes a
+        // visible one-frame stall. Commit it only after playback is finished.
+        if (mode === 'playback' || mode === 'paused' || mode === 'settling') {
+          pendingSample = { gen, sample };
+          return true;
+        }
+        return commitSample(sample);
+      })
+      .catch(() => {
+        if (gen === sampleGen && !stage?.classList.contains('has-full-particles')) {
+          buildFallback(nextLayout);
+        }
+        return false;
+      });
+    return readyPromise;
   }
 
-  function beginPlayback() {
+  function ready() {
+    return readyPromise;
+  }
+
+  function beginPlayback({ resume = false } = {}) {
     mode = 'playback';
-    progress = 0;
-    activeMeasure = null;
-    uVisibleMeasure.value = -1;
-    modeStartedAt = performance.now();
+    if (!resume) {
+      progress = 0;
+      activeMeasure = null;
+      activeMeasureProgress = 0;
+    }
+    // A resumed score is already fully scattered. Preserve both its musical
+    // coordinate and scatter amount instead of replaying the entrance ramp.
+    modeStartedAt = performance.now() - (resume ? 280 : 0);
     stage?.classList.remove('is-particle-paused', 'is-particle-settling');
     stage?.classList.add('is-particle-playing');
     stage?.style.setProperty('--sheet-music-progress', '0%');
@@ -630,10 +791,10 @@ export function createSheetMusicParticles(canvas) {
     ensureLoop();
   }
 
-  function setProgress(next, measureIndex = activeMeasure) {
+  function setProgress(next, measureIndex = activeMeasure, measureProgress = next) {
     progress = clamp(next);
     activeMeasure = measureIndex;
-    uVisibleMeasure.value = measureIndex ?? -1;
+    activeMeasureProgress = clamp(Number(measureProgress) || 0);
     stage?.style.setProperty('--sheet-music-progress', `${ (progress * 100).toFixed(2) }%`);
     if (measureIndex != null) setLabel(`Assembling measure ${ measureIndex + 1 }`);
   }
@@ -651,17 +812,18 @@ export function createSheetMusicParticles(canvas) {
     }
     if (preserveProgress) immediate = true;
     progress = 1;
-    uVisibleMeasure.value = Number.MAX_SAFE_INTEGER;
+    activeMeasureProgress = 1;
     mode = immediate || rm ? 'idle' : 'settling';
     modeStartedAt = performance.now();
     uScatterT.value = mode === 'idle' ? 0 : uScatterT.value;
     stage?.classList.toggle('is-particle-settling', mode === 'settling');
     stage?.style.setProperty('--sheet-music-progress', '0%');
     setLabel(mode === 'idle' ? 'Sheet music breathing' : 'Recalling the sheet music');
+    if (mode === 'idle') applyPendingSample();
     ensureLoop();
   }
 
-  mq.addEventListener?.('change', (e) => {
+  function handleMotionPreferenceChange(e) {
     rm = e.matches;
     uMotionStrength.value = rm ? 0 : 1;
     uPointerActive.value = rm ? 0 : uPointerActive.value;
@@ -670,10 +832,11 @@ export function createSheetMusicParticles(canvas) {
       uScatterT.value = 0;
       stage?.classList.remove('is-particle-settling');
       setLabel('Sheet music breathing');
+      applyPendingSample();
     }
-  });
+  }
 
-  stage?.addEventListener('pointermove', (event) => {
+  function handlePointerMove(event) {
     if (rm) return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -682,11 +845,41 @@ export function createSheetMusicParticles(canvas) {
       cH - (event.clientY - rect.top) * cH / rect.height,
     );
     uPointerActive.value = 1;
-  }, { passive: true });
-  stage?.addEventListener('pointerleave', () => { uPointerActive.value = 0; }, { passive: true });
+  }
+
+  function handlePointerLeave() {
+    uPointerActive.value = 0;
+  }
+
+  mq.addEventListener?.('change', handleMotionPreferenceChange);
+  stage?.addEventListener('pointermove', handlePointerMove, { passive: true });
+  stage?.addEventListener('pointerleave', handlePointerLeave, { passive: true });
+
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    sampleGen++;
+    pendingSample = null;
+    sampleCache.clear();
+    if (frameId) cancelAnimationFrame(frameId);
+    frameId = 0;
+    mq.removeEventListener?.('change', handleMotionPreferenceChange);
+    stage?.removeEventListener('pointermove', handlePointerMove);
+    stage?.removeEventListener('pointerleave', handlePointerLeave);
+    stage?.classList.remove('has-full-particles', 'is-particle-playing', 'is-particle-paused', 'is-particle-settling');
+    toneAnalyser?.dispose?.();
+    toneAnalyser = null;
+    if (pts) scene.remove(pts);
+    if (bPts) scene.remove(bPts);
+    geo?.dispose();
+    mat.dispose();
+    bloomMat.dispose();
+    uDotTex.value?.dispose?.();
+    renderer.dispose();
+  }
 
   syncCamera();
   ensureLoop();
 
-  return { setSheetMusic, beginPlayback, setProgress, settle };
+  return { setSheetMusic, ready, beginPlayback, setProgress, settle, destroy };
 }

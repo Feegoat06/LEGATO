@@ -16,6 +16,19 @@ test('coach prompt forbids key inference and identifies direct transitions', () 
   assert.match(prompt, /key-signature setting is spelling—not proof/i); assert.match(prompt, /none \(direct transition\)/); assert.match(prompt, /do not invent a technique/i);
 });
 
+test('coach prompt carries Tutor mode, learner question, and recent local context', () => {
+  const prompt = buildSeamCoachPrompt({
+    ...base,
+    technique: 'none',
+    mode: 'ask',
+    question: 'Why does the top voice feel settled?',
+    history: [{ role: 'user', content: 'Focus on voice leading.' }],
+  });
+  assert.match(prompt, /Current Tutor mode: ask/);
+  assert.match(prompt, /top voice feel settled/);
+  assert.match(prompt, /Focus on voice leading/);
+});
+
 test('invalid coach JSON produces controlled errors', () => {
   assert.throws(() => parseCoachResponse('not json'), /malformed JSON/);
   assert.throws(() => parseCoachResponse('{"whatYouHear":"x"}'), /required educational schema/);

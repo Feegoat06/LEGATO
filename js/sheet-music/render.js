@@ -14,9 +14,14 @@
  */
 import { vexKeyForNote, chordSpellingIdentity } from '../engine/chords.js';
 import { accidentalFor } from '../engine/key-signature.js';
+import { createParkourObstacle } from './parkour.js';
 
 const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
 const DURATIONS = new Map([[4, 'w'], [3, 'hd'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
+// The first system needs real space above it for Tenutino's jump. Previously
+// its resting position was clamped to y=4, so subtracting the parkour lift was
+// immediately clamped away and only later systems could visibly jump.
+export const NOTATION_TOP_HEADROOM = 50;
 
 /** 'auto' picks bass or treble from the median MIDI note across all segments. */
 function resolvedClef(segments, setting) {
@@ -27,6 +32,23 @@ function resolvedClef(segments, setting) {
 
 function styleModifiers(stave, color) {
   stave.getModifiers().forEach((modifier) => modifier.setStyle({ fillStyle: color, strokeStyle: color }));
+}
+
+/**
+ * Pair VexFlow's final engraved X positions with the same measure-relative
+ * beat onsets used by the audio scheduler. These anchors let visual effects
+ * follow musical time instead of treating clefs and time signatures as part
+ * of the playable horizontal duration.
+ */
+export function timelineAnchorsForNotes(segments, notes, measureLength) {
+  const duration = Math.max(1, Number(measureLength) || 1);
+  return notes
+    .map((note, index) => ({
+      x: Number(note.getAbsoluteX?.()),
+      progress: Math.max(0, Math.min(1, (Number(segments[index]?.startBeat) || 0) / duration)),
+    }))
+    .filter((anchor) => Number.isFinite(anchor.x))
+    .sort((first, second) => first.x - second.x);
 }
 
 /**
@@ -101,6 +123,7 @@ export function renderNotation(container, segments, settings, chords = []) {
   const techniqueColor = '#d1a15a';
   const notesBySource = [];
   const layout = [];
+  const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
   const identityBySourceId = new Map();
   chords.forEach((chord) => identityBySourceId.set(chord.id, chordSpellingIdentity(chord)));
 
@@ -246,13 +269,22 @@ export function renderNotation(container, segments, settings, chords = []) {
   const rows = systems.length;
   const rowHeight = 150;
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(width, rows * rowHeight + 20);
+  renderer.resize(width, rows * rowHeight + 20 + NOTATION_TOP_HEADROOM);
   const context = renderer.getContext();
 
   for (const measureData of placements) {
-    const { measure, staveNotes, voice, formatter, column, row, x, staveWidth, startsMeasure, endsMeasure } = measureData;
-    const y = 16 + row * rowHeight;
-    layout.push({ index: measure, x, width: staveWidth, staffTop: y + 40, lineGap: 10 });
+    const { measure, entries, staveNotes, voice, formatter, column, row, x, staveWidth, startsMeasure, endsMeasure } = measureData;
+    const y = 16 + NOTATION_TOP_HEADROOM + row * rowHeight;
+    const measureLayout = {
+      index: measure,
+      x,
+      width: staveWidth,
+      staffTop: y + 40,
+      lineGap: 10,
+      timelineAnchors: [],
+      parkourObstacles: [],
+    };
+    layout.push(measureLayout);
     context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
     const stave = new VF.Stave(x, y, staveWidth);
     if (!startsMeasure) stave.setBegBarType(VF.Barline.type.NONE);
@@ -270,6 +302,19 @@ export function renderNotation(container, segments, settings, chords = []) {
     if (staveNotes.length) {
       formatter.format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
+      const fragmentSegments = entries.map((entry) => entry.segment);
+      measureLayout.timelineAnchors = timelineAnchorsForNotes(
+        fragmentSegments,
+        staveNotes,
+        measureLength,
+      );
+      measureLayout.parkourObstacles = staveNotes
+        .map((note) => createParkourObstacle(
+          note.getKeyProps?.() ?? [],
+          note.getAbsoluteX?.(),
+          measureLayout.lineGap,
+        ))
+        .filter(Boolean);
     }
     context.closeGroup();
   }
