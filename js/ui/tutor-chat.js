@@ -1,8 +1,10 @@
 /**
- * Right-side Tutor drawer shared by Tenutino's three actions.
+ * Right-side Tutor drawer shared by Tenutino's three actions, plus a
+ * persistent semi-transparent edge opener on the right of the viewport.
  * Conversation state stays local to the browser and is restored per project.
  */
 import { escapeHtml } from '../util/html.js';
+import { icon } from './icons.js';
 
 const MODES = {
   explain: {
@@ -56,6 +58,9 @@ function resultMarkup(result) {
 
 export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   container.innerHTML = `
+    <button class="tutor-chat-opener" type="button" aria-label="Open Tutor chat" title="Ask Tenutino">
+      ${ icon('chevronLeft') }
+    </button>
     <aside class="tutor-chat-drawer" aria-labelledby="tutor-chat-title" aria-hidden="true">
       <header class="tutor-chat-header">
         <div class="tutor-chat-identity">
@@ -80,6 +85,7 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   `;
 
   const drawer = container.querySelector('.tutor-chat-drawer');
+  const opener = container.querySelector('.tutor-chat-opener');
   const modeEl = container.querySelector('#tutor-chat-mode');
   const titleEl = container.querySelector('#tutor-chat-title');
   const contextEl = container.querySelector('.tutor-chat-context');
@@ -159,12 +165,18 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
     syncEmptyState();
     drawer.classList.add('is-open');
     drawer.setAttribute('aria-hidden', 'false');
+    opener.classList.add('is-hidden');
     if (focusComposer) requestAnimationFrame(() => input.focus());
   }
 
   function close() {
     drawer.classList.remove('is-open');
     drawer.setAttribute('aria-hidden', 'true');
+    if (!playbackActive) opener.classList.remove('is-hidden');
+  }
+
+  function openFromOpener() {
+    open('ask', { focusComposer: true });
   }
 
   function submitMessage(event) {
@@ -177,6 +189,7 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   }
 
   closeButton.addEventListener('click', close);
+  opener.addEventListener('click', openFromOpener);
   form.addEventListener('submit', submitMessage);
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -193,6 +206,7 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
     setPlaybackActive(active) {
       playbackActive = Boolean(active);
       if (playbackActive) close();
+      opener.classList.toggle('is-hidden', playbackActive || drawer.classList.contains('is-open'));
     },
     setContext(text) { contextEl.textContent = text; },
     clearTransient,
@@ -219,6 +233,7 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
     getMode() { return mode; },
     destroy() {
       closeButton.removeEventListener('click', close);
+      opener.removeEventListener('click', openFromOpener);
       form.removeEventListener('submit', submitMessage);
       container.replaceChildren();
     },

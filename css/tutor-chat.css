@@ -7,6 +7,69 @@
    Send button — come from base.css so this file only styles what's unique to
    the drawer (position, layout, message bubbles, composer grid). */
 
+/* Edge opener — a semi-transparent half-pill hugging the right edge of the
+   viewport. Always available (except during playback / when the drawer is
+   already open) so the Tutor can be reached without going through
+   Tenutino's action menu. The chevron points left, hinting the drawer
+   slides in from the right. */
+.tutor-chat-opener {
+    position: fixed;
+    z-index: 39;
+    top: 50%;
+    right: 0;
+    translate: 0 -50%;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 76px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-right: 0;
+    border-radius: var(--radius-card) 0 0 var(--radius-card);
+    background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition:
+        color .15s ease,
+        border-color .15s ease,
+        background .15s ease,
+        opacity .2s ease,
+        visibility 0s linear 0s
+}
+
+.tutor-chat-opener .ui-icon {
+    width: 18px;
+    height: 18px;
+    transition: transform .15s ease
+}
+
+.tutor-chat-opener:hover,
+.tutor-chat-opener:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent-border);
+    background: color-mix(in srgb, var(--panel-2) 80%, transparent)
+}
+
+.tutor-chat-opener:hover .ui-icon {
+    transform: translateX(-2px)
+}
+
+.tutor-chat-opener:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px
+}
+
+.tutor-chat-opener.is-hidden {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity .2s ease,
+        visibility 0s linear .2s
+}
+
 .tutor-chat-drawer {
     position: fixed;
     z-index: 40;
@@ -254,7 +317,9 @@
 }
 
 @media(prefers-reduced-motion:reduce) {
-    .tutor-chat-drawer {
+    .tutor-chat-drawer,
+    .tutor-chat-opener,
+    .tutor-chat-opener .ui-icon {
         transition: none
     }
 }
