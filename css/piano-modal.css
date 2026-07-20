@@ -154,6 +154,13 @@ dialog::backdrop {
     margin: 0
 }
 
+.piano-selected-notes {
+    min-height: 1.25em;
+    margin: 9px 0 0;
+    color: var(--tan-dim);
+    font: 500 var(--fs-copy) var(--font-body);
+}
+
 .piano {
     height: 210px;
     display: flex;
@@ -390,7 +397,15 @@ dialog::backdrop {
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    gap: 16px;
     padding-top: 20px
+}
+
+.voicing-status {
+    flex: 1;
+    margin: 0;
+    color: var(--tan-dim);
+    font: 400 var(--fs-copy) var(--font-body);
 }
 
 .save-button {

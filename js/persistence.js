@@ -256,12 +256,14 @@ function emptyProgression() {
 function normalizeStoredProject(project) {
   if (!project?.progression?.settings) return project;
   const settings = project.progression.settings;
-  if (settings.theme?.accent && settings.theme?.chordFont) return project;
+  const normalizedSettings = makeSettings(settings);
+  if (settings.theme?.accent && settings.theme?.chordFont
+    && settings.meterType === normalizedSettings.meterType) return project;
   return {
     ...project,
     progression: {
       ...project.progression,
-      settings: makeSettings(settings),
+      settings: normalizedSettings,
     },
   };
 }

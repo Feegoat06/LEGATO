@@ -22,11 +22,6 @@ const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical' };
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.5;
 const ZOOM_STEP = 0.1;
-// Continuous wheel zoom. One wheel notch (~100 units of deltaY on most mice
-// under DOM_DELTA_PIXEL) moves the zoom ~2%, so five notches = one 10% step.
-const WHEEL_ZOOM_FACTOR = 0.0005;
-const WHEEL_DELTA_LINE_PX = 16;
-const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
 <header class="sheet-music-header">
@@ -83,7 +78,6 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const zoomOutBtn = container.querySelector('#sheet-music-zoom-out');
   const zoomInBtn = container.querySelector('#sheet-music-zoom-in');
   const layerEl = container.querySelector('#sheet-music-layer');
-  const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
@@ -144,39 +138,30 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   }
 
   function clampZoom(value) {
-    // Fine 0.1% precision so trackpad microdeltas accumulate visibly. The
-    // displayed readout still rounds to integer percent, and the +/- buttons
-    // move by 0.1, so both interactions read as clean 10% marks.
-    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 1000) / 1000));
+    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
   }
 
   function setZoom(nextZoom) {
     zoom = clampZoom(nextZoom);
-    layerEl.style.width = `${ 100 / zoom }%`;
+    // Keep the visible sheet the width of its stage at every zoom level. This
+    // gives a zoomed-out sheet additional layout room for more measures per
+    // system, while a crowded measure at higher zoom moves its neighbour to
+    // the next line instead of compressing either bar's notation.
     layerEl.style.zoom = String(zoom);
     zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
     zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
     zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
+    // CSS `zoom` already changes this element's layout coordinate space. Keep
+    // the layer at 100% so the rendered SVG reaches the visual panel width at
+    // every button zoom level; applying an inverse percentage here would make
+    // a zoomed-in score leave a black gap on the right.
+    layerEl.style.width = '100%';
     scheduleRerender();
   }
 
   zoomOutBtn.onclick = () => setZoom(zoom - ZOOM_STEP);
   zoomInBtn.onclick = () => setZoom(zoom + ZOOM_STEP);
 
-  // Wheel-to-zoom. Every event moves the zoom immediately (responsive),
-  // but by a small fraction of the deltaY so a single mouse-wheel notch
-  // is a 2% nudge rather than the old 10% jump. Trackpad users get finer
-  // deltas and correspondingly smoother motion.
-  function normalizeWheelDelta(event) {
-    if (event.deltaMode === 1) return event.deltaY * WHEEL_DELTA_LINE_PX;
-    if (event.deltaMode === 2) return event.deltaY * WHEEL_DELTA_PAGE_PX;
-    return event.deltaY;
-  }
-  notationStageEl.addEventListener('wheel', (event) => {
-    if (event.deltaY === 0) return;
-    event.preventDefault();
-    setZoom(zoom - normalizeWheelDelta(event) * WHEEL_ZOOM_FACTOR);
-  }, { passive: false });
   window.addEventListener('resize', scheduleRerender);
 
   setZoom(zoom);

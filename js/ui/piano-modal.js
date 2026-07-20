@@ -21,10 +21,10 @@
  * the current progression's meter, so no state outside this file has to know
  * we display beats.
  */
-import { QUALITIES, inferChordIdentity, noteName, notesFrom, vexKeyForNote, formatChordSymbol } from '../engine/chords.js';
+import { QUALITIES, inferChordIdentity, noteName, notesFrom, vexKeyForNote, formatChordSymbol, chordToneName } from '../engine/chords.js';
 import { playNote, playChord } from '../audio/playback.js';
-import { beatsToBars, barsToBeats } from '../state.js';
-import { pitchClassOf, octaveOf } from '../util/midi.js';
+import { beatChoicesForMeter, beatsToBars, barsToBeats } from '../state.js';
+import { pitchClassOf, octaveOf, spellPitchClass } from '../util/midi.js';
 import { accidentalFor } from '../engine/key-signature.js';
 import { installBackdropDismissal } from './dialog.js';
 import { icon } from './icons.js';
@@ -51,6 +51,7 @@ const DIALOG_TEMPLATE = `
           <p>Click keys to select exact notes</p>
         </div>
         <div id="piano-keys" class="piano" role="group" aria-label="Piano note selector"></div>
+        <p id="selected-notes" class="piano-selected-notes" aria-live="polite">No notes selected</p>
       </div>
       <aside class="preview-panel" aria-label="Chord preview">
         <div class="chord-name-preview">
@@ -69,6 +70,7 @@ const DIALOG_TEMPLATE = `
       </aside>
     </div>
     <footer class="dialog-footer">
+      <p id="voicing-status" class="voicing-status" aria-live="polite">The exact selected notes are stored—never an inversion preset.</p>
       <button id="modal-save" class="save-button" type="button">Save</button>
     </footer>
   </form>
@@ -90,16 +92,11 @@ const QUALITY_LABELS = {
   Major: 'Major', Minor: 'Minor', Dom7: 'Dom 7', Maj7: 'Maj 7', Min7: 'Min 7',
   Dim: 'Dim', Dim7: 'Dim 7', m7b5: 'm7b5', Sus2: 'Sus2', Sus4: 'Sus4', Aug: 'Aug',
 };
-const BEAT_OPTIONS = [
-  { beats: 0.5, label: '½ beat' },
-  { beats: 1, label: '1 beat' },
-  { beats: 1.5, label: '1½ beats' },
-  { beats: 2, label: '2 beats' },
-  { beats: 3, label: '3 beats' },
-  { beats: 4, label: '4 beats' },
-  { beats: 6, label: '6 beats' },
-  { beats: 8, label: '8 beats' },
-];
+const beatLabel = (beats) => {
+  if (beats === 0.5) return '½ beat';
+  if (beats === 1.5) return '1½ beats';
+  return `${ beats } beat${ beats === 1 ? '' : 's' }`;
+};
 
 /** Detect a chord identity from raw selected notes, biased toward the bass. */
 function detect(notes) {
@@ -153,7 +150,7 @@ function renderPreview(container, notes, key, identity) {
 function fillBeatOptions(select, timeSig, currentBars) {
   select.replaceChildren();
   const currentBeats = currentBars != null ? Number(barsToBeats(currentBars, timeSig).toFixed(4)) : null;
-  const options = [...BEAT_OPTIONS];
+  const options = beatChoicesForMeter(timeSig).map((beats) => ({ beats, label: beatLabel(beats) }));
   const known = options.some((opt) => opt.beats === currentBeats);
   if (currentBeats != null && !known) {
     options.push({ beats: currentBeats, label: `${ currentBeats } beats` });
@@ -201,6 +198,8 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
   const previewSheet = dialog.querySelector('#preview-sheet');
   const previewPlay = dialog.querySelector('#preview-play');
   const chordNameGlyph = dialog.querySelector('#chord-name-glyph');
+  const selectedNotes = dialog.querySelector('#selected-notes');
+  const voicingStatus = dialog.querySelector('#voicing-status');
   const octaveReadout = dialog.querySelector('#octave-readout');
   const octaveUp = dialog.querySelector('#octave-up');
   const octaveDown = dialog.querySelector('#octave-down');
@@ -283,6 +282,16 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
       chordNameGlyph.textContent = sorted.length ? '—' : 'N/A';
       chordNameGlyph.classList.toggle('is-empty', !sorted.length);
     }
+    const identity = currentIdentity(recognized);
+    const letters = identity
+      ? [...new Set(sorted.map((midi) => chordToneName(midi, identity, key).replace(/\d+$/, '')))]
+      : [...new Set(sorted.map((midi) => spellPitchClass(midi, key)))];
+    selectedNotes.textContent = letters.length ? letters.join(' · ') : 'No notes selected';
+    voicingStatus.textContent = recognized
+      ? `${ spellPitchClass(rootPc, key) } ${ QUALITY_LABELS[quality] } pitch classes recognized. Octaves and doublings remain yours.`
+      : sorted.length
+        ? 'Custom pitch-class set: no matching chord label, but every selected note is preserved.'
+        : 'Toggle any key or click a quality to begin.';
     dialog.querySelector('#modal-save').disabled = sorted.length === 0;
     previewPlay.disabled = sorted.length === 0;
   }

@@ -37,6 +37,7 @@ import { compileProgression } from './engine/compile.js';
  * @typedef {Object} Settings
  * @property {number}  tempo     BPM. PLAYER-ONLY — compile() ignores it.
  * @property {TimeSig} timeSig   Structural. measureLength (quarter-beats) = num * 4 / den.
+ * @property {'simple'|'compound'} meterType  Immutable project-creation choice, derived from timeSig.
  * @property {number}  key       Key signature on the circle of fifths, -7..+7. Sharps +, flats −.
  *                               Notation-only: drives enharmonic spelling and printed accidentals.
  *                               Never mutates chord.notes. Transposition is a separate feature.
@@ -83,7 +84,7 @@ import { compileProgression } from './engine/compile.js';
  * compile()'s output unit: one atomic, fully-resolved, notatable-and-playable event.
  * @typedef {Object} Segment
  * @property {number[]}    notes         Resolved pitches (post voice-leading for techniques).
- * @property {number}      durationBeats One standard note-value (from [4,2,1,0.5,0.25]).
+ * @property {number}      durationBeats One standard note-value (from [4,3,2,1,0.5,0.25]).
  * @property {boolean}     isTechnique   Colour + whether the coach explains it.
  * @property {string}      sourceId      TIES: adjacent segments sharing this get a StaveTie.
  * @property {number|null} seamIndex     Which seam produced it (coach lookup); null for user chords.
@@ -104,7 +105,7 @@ export const TECHNIQUE_IDS = /** @type {const} */ ([
 ]);
 
 /** Greedy decomposition values, largest-first. 0.25 (sixteenth) MUST stay in this list. */
-export const STANDARD_DURATIONS = [4, 2, 1, 0.5, 0.25];
+export const STANDARD_DURATIONS = [4, 3, 2, 1, 0.5, 0.25];
 
 /** Closest-voicing search window (narrower than the 21..108 input range, on purpose). */
 export const VOICING_MIN_MIDI = 40;
@@ -148,6 +149,16 @@ export function isTechniqueUsable(technique, departingChord, timeSig) {
 /** 6/8, 9/8, 12/8. Compound meters group eighth notes into dotted-quarter beats. */
 export function isCompoundMeter(timeSig) {
     return timeSig.den === 8 && timeSig.num % 3 === 0 && timeSig.num >= 6;
+}
+
+/** UI duration choices expressed in the meter's counted beats. Compound
+ * meters count dotted-quarter beats, so half and dotted counted beats are
+ * deliberately excluded there. */
+export const SIMPLE_BEAT_CHOICES = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
+export const COMPOUND_BEAT_CHOICES = [1, 2, 3, 4, 6, 8];
+
+export function beatChoicesForMeter(timeSig) {
+    return isCompoundMeter(timeSig) ? COMPOUND_BEAT_CHOICES : SIMPLE_BEAT_CHOICES;
 }
 
 /** Length of one user-facing beat in quarter-beats. Dotted-quarter (1.5) if compound, else 4/den. */
@@ -211,13 +222,16 @@ export function makeSettings(overrides = {}) {
     const timeSig = overrides.timeSig
         ? { ...overrides.timeSig }
         : { num: 4, den: 4 };
+    const meterType = isCompoundMeter(timeSig) ? 'compound' : 'simple';
     return {
         tempo: TEMPO_DEFAULT,
         timeSig,
+        meterType,
         key: 0,
         clef: 'auto',
         ...overrides,
         timeSig,
+        meterType,
         theme: makeTheme(overrides.theme),
     };
 }
@@ -243,8 +257,13 @@ export function makeProgression(overrides = {}) {
     // makeSettings normalizes any partial input (fills theme + timeSig defaults),
     // so callers passing a bare {tempo, timeSig, key, clef} still land on a
     // well-formed Settings shape without every call site having to remember.
+    const settings = makeSettings(overrides.settings ?? {});
     const progression = {
-        settings: makeSettings(overrides.settings),
+        settings,
+        chords: [],
+        seams: [],
+        ...overrides,
+        settings,
         chords: overrides.chords ?? [],
         seams: overrides.seams ?? [],
     };
