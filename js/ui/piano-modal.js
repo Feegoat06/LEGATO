@@ -21,61 +21,55 @@
  * the current progression's meter, so no state outside this file has to know
  * we display beats.
  */
-import { QUALITIES, inferChordIdentity, noteName, notesFrom, vexKeyForNote, chordToneName } from '../engine/chords.js';
+import { QUALITIES, inferChordIdentity, noteName, notesFrom, vexKeyForNote, formatChordSymbol } from '../engine/chords.js';
 import { playNote, playChord } from '../audio/playback.js';
 import { beatChoicesForMeter, beatsToBars, barsToBeats } from '../state.js';
-import { pitchClassOf, octaveOf, spellPitchClass } from '../util/midi.js';
+import { pitchClassOf, octaveOf } from '../util/midi.js';
 import { accidentalFor } from '../engine/key-signature.js';
 import { installBackdropDismissal } from './dialog.js';
+import { icon } from './icons.js';
+
+const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
 
 const DIALOG_TEMPLATE = `
 <dialog id="piano-dialog">
-  <form method="dialog" class="dialog-shell" onsubmit="return false">
+  <form method="dialog" class="dialog-shell piano-modal-shell" onsubmit="return false">
     <header class="dialog-header">
       <div>
-        <p class="kicker">Explicit voicing</p>
-        <h2>Shape the chord</h2>
-        <p>Pick a root and quality, then toggle any key to shape the octave, doubling, and inversion.</p>
+        <h2>Add a Chord</h2>
       </div>
-      <button id="modal-cancel" class="close-button" aria-label="Close chord editor">×</button>
+      <button id="modal-cancel" class="close-button" aria-label="Close chord editor">${ icon('close') }</button>
     </header>
-    <div class="modal-controls">
-      <label><span>Root</span><select id="modal-root"></select></label>
-      <label><span>Duration</span><select id="modal-bars">
-        <option value="0.5">½ bar</option>
-        <option value="1" selected>1 bar</option>
-        <option value="1.5">1½ bars</option>
-        <option value="2">2 bars</option>
-        <option value="3">3 bars</option>
-        <option value="4">4 bars</option>
-      </select></label>
-    </div>
-    <div class="quality-chips" id="modal-quality-chips" role="group" aria-label="Chord quality"></div>
     <div class="piano-stage">
       <div class="piano-column">
+        <div class="modal-controls">
+          <label><span>Root</span><select id="modal-root"></select></label>
+          <label><span>Duration</span><select id="modal-duration"></select></label>
+        </div>
+        <div class="quality-chips" id="modal-quality-chips" role="group" aria-label="Chord quality"></div>
         <div class="piano-instruction">
-          <p>Click keys to toggle exact notes</p>
+          <p>Click keys to select exact notes</p>
         </div>
         <div id="piano-keys" class="piano" role="group" aria-label="Piano note selector"></div>
-        <div class="selection-readout">
-          <div><span>Pitch names</span><strong id="selected-notes">No notes selected</strong></div>
-        </div>
       </div>
       <aside class="preview-panel" aria-label="Chord preview">
+        <div class="chord-name-preview">
+          <span class="chord-name-preview-label">Detected chord</span>
+          <strong class="chord-name-preview-glyph chord-glyph" id="chord-name-glyph">N/A</strong>
+        </div>
         <div class="preview-header">
-          <div class="preview-title"><span>Preview</span><button type="button" id="preview-play" class="preview-play" aria-label="Play chord preview">▶</button></div>
+          <div class="preview-title"><span>Preview</span><button type="button" id="preview-play" class="preview-play" aria-label="Play chord preview">${ icon('play') }</button></div>
           <span id="octave-readout">Octave 4</span>
         </div>
         <div class="preview-sheet" id="preview-sheet" role="button" tabindex="0" aria-label="Play chord preview"></div>
         <div class="octave-controls">
-          <button type="button" id="octave-down" aria-label="Shift down one octave">▼ Octave</button>
-          <button type="button" id="octave-up" aria-label="Shift up one octave">▲ Octave</button>
+          <button type="button" id="octave-down" aria-label="Shift down one octave">${ icon('chevronDown') }<span>Octave</span></button>
+          <button type="button" id="octave-up" aria-label="Shift up one octave">${ icon('chevronUp') }<span>Octave</span></button>
         </div>
       </aside>
     </div>
     <footer class="dialog-footer">
-      <p id="voicing-status">The exact selected notes are stored—never an inversion preset.</p>
-      <button id="modal-save" class="save-button" type="button">Save exact voicing <span>→</span></button>
+      <button id="modal-save" class="save-button" type="button">Save</button>
     </footer>
   </form>
 </dialog>
@@ -134,7 +128,7 @@ function renderPreview(container, notes, key, identity) {
   const staffColor = '#7a664b';
   const noteColor = '#e6ceaa';
   const stave = new VF.Stave(6, 14, width - 12);
-  stave.addClef(clef);
+  stave.addClef(clef).addKeySignature(KEY_SIGNATURES[key + 7]);
   stave.getModifiers().forEach((m) => m.setStyle({ fillStyle: staffColor, strokeStyle: staffColor }));
   ctx.setStrokeStyle(staffColor); ctx.setFillStyle(staffColor);
   stave.setStyle({ fillStyle: staffColor, strokeStyle: staffColor }).setContext(ctx).draw();
@@ -151,11 +145,6 @@ function renderPreview(container, notes, key, identity) {
   voice.draw(ctx, stave);
 }
 
-/**
- * Populate the duration `<select>` with beat options for the current meter.
- * If the chord being edited has a `bars` value that doesn't map to any preset,
- * we insert it as an extra option so the round-trip Edit→Save doesn't lose it.
- */
 function fillBeatOptions(select, timeSig, currentBars) {
   select.replaceChildren();
   const currentBeats = currentBars != null ? Number(barsToBeats(currentBars, timeSig).toFixed(4)) : null;
@@ -170,6 +159,14 @@ function fillBeatOptions(select, timeSig, currentBars) {
     if (currentBeats != null && opt.beats === currentBeats) option.selected = true;
     select.add(option);
   });
+}
+
+function renderGlyph({ root, baseline, marker, suffix, superscript, plain }) {
+  if (!root) return plain;
+  const markerHtml = marker ? `<sup class="chord-quality-marker">${ marker }</sup>` : '';
+  const suffixHtml = suffix ? `<sup class="chord-quality-suffix">${ suffix }</sup>` : '';
+  const supHtml = superscript ? `<sup>${ superscript }</sup>` : '';
+  return `${ root }${ baseline }${ markerHtml }${ suffixHtml }${ supHtml }`;
 }
 
 /**
@@ -193,23 +190,24 @@ function fillBeatOptions(select, timeSig, currentBars) {
  */
 export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4, den: 4 }, key = 0) {
   const rootSelect = dialog.querySelector('#modal-root');
-  const durationSelect = dialog.querySelector('#modal-bars');
+  const durationSelect = dialog.querySelector('#modal-duration');
   const keys = dialog.querySelector('#piano-keys');
   const chips = dialog.querySelector('#modal-quality-chips');
   const previewSheet = dialog.querySelector('#preview-sheet');
   const previewPlay = dialog.querySelector('#preview-play');
+  const chordNameGlyph = dialog.querySelector('#chord-name-glyph');
   const octaveReadout = dialog.querySelector('#octave-readout');
   const octaveUp = dialog.querySelector('#octave-up');
   const octaveDown = dialog.querySelector('#octave-down');
 
+  const currentBars = existingChord?.bars ?? 1;
+  const currentBeats = Number(barsToBeats(currentBars, timeSig).toFixed(4));
   fillBeatOptions(durationSelect, timeSig, existingChord?.bars ?? 1);
 
   let selected = new Set(existingChord?.notes ?? notesFrom(60, 'Major'));
   const initialDetection = existingChord ? detect([...selected]) : { rootPc: 0, quality: 'Major' };
   let rootPc = initialDetection?.rootPc ?? pitchClassOf(existingChord?.hint?.rootMidi ?? 60);
   let quality = initialDetection?.quality ?? existingChord?.hint?.quality ?? 'Major';
-  // Fallback used only when `selected` is empty; when notes are present the
-  // octave shown is always derived from them so shifting up/down stays in sync.
   let emptyOctave = existingChord?.hint?.rootMidi != null
     ? octaveOf(existingChord.hint.rootMidi)
     : existingChord?.notes?.length
@@ -271,16 +269,15 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
   }
 
   function updateStatus(sorted, recognized) {
-    const identity = currentIdentity(recognized);
-    const letters = identity
-      ? [...new Set(sorted.map((midi) => chordToneName(midi, identity, key).replace(/\d+$/, '')))]
-      : [...new Set(sorted.map((midi) => spellPitchClass(midi, key)))];
-    dialog.querySelector('#selected-notes').textContent = letters.length ? letters.join(' · ') : 'No notes selected';
-    dialog.querySelector('#voicing-status').textContent = recognized
-      ? `${ spellPitchClass(rootPc, key) } ${ QUALITY_LABELS[quality] } pitch classes recognized. Octaves and doublings remain yours.`
-      : sorted.length
-        ? 'Custom pitch-class set: no matching chord label, but every selected note is preserved.'
-        : 'Toggle any key or click a quality to begin.';
+    if (recognized && sorted.length) {
+      const fakeChord = { notes: sorted, hint: { rootMidi: rootPc + (octaveOf(Math.min(...sorted)) + 1) * 12, quality } };
+      const sym = formatChordSymbol(fakeChord, key);
+      chordNameGlyph.innerHTML = renderGlyph(sym);
+      chordNameGlyph.classList.remove('is-empty');
+    } else {
+      chordNameGlyph.textContent = sorted.length ? '—' : 'N/A';
+      chordNameGlyph.classList.toggle('is-empty', !sorted.length);
+    }
     dialog.querySelector('#modal-save').disabled = sorted.length === 0;
     previewPlay.disabled = sorted.length === 0;
   }
@@ -387,9 +384,6 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
   dialog.querySelector('#modal-save').onclick = () => {
     const notes = [...selected].sort((a, b) => a - b);
     if (!notes.length) return;
-    // Detection is what decides whether we attach a display hint: if the notes
-    // resolve to a chord label, save it; otherwise the row falls back to a
-    // notes-list display via chordDisplayName.
     const detected = detect(notes);
     const hint = detected
       ? { rootMidi: detected.rootPc + (octaveOf(Math.min(...notes)) + 1) * 12, quality: detected.quality }
@@ -409,12 +403,12 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
 }
 
 /**
- * One-time boot: fill the static root select with 12 pitch-class options and
- * build a chip button for every entry in QUALITIES. `openPianoModal` toggles
- * the active chip via event delegation, so no per-open rebuild is needed.
+ * One-time boot: fill the root select and build quality chip buttons.
+ * `openPianoModal` toggles the active chip via event delegation.
  */
 export function populateChordControls(dialog) {
   const root = dialog.querySelector('#modal-root');
+  root.replaceChildren();
   PITCH_CLASS_LABELS.forEach((label, pc) => root.add(new Option(label, String(pc))));
   const chips = dialog.querySelector('#modal-quality-chips');
   chips.replaceChildren();

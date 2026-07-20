@@ -14,9 +14,7 @@
  * On top of every mutation, `scheduleAutosave()` debounces a write to the
  * ProjectStore so localStorage stays in sync without a manual save button.
  */
-import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
-import { chordDisplayName } from '../engine/chords.js';
-import { TECHNIQUES } from '../engine/techniques.js';
+import { compile, makeChord, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { playSegments, stopPlayback, pausePlayback, resumePlayback } from '../audio/playback.js';
 import { openPianoModal, populateChordControls } from '../ui/piano-modal.js';
@@ -24,9 +22,7 @@ import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
 import { mountTransport } from '../ui/transport.js';
-import { mountCoachPanel } from '../ui/coach-panel.js';
-import { buildCoachEvidence } from '../coach/evidence.js';
-import { requestCoach } from '../coach/coach.js';
+import { applyTheme, clearTheme } from '../theme.js';
 import { navigate, LANDING_HASH } from '../router.js';
 
 const SHELL_TEMPLATE = `
@@ -59,6 +55,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let editingId = null;
       let selectedSeam = 0;
 
+      // Apply per-project accent + chord-font to the document root so every
+      // panel restyles instantly. Cleared on unmount so navigating away
+      // (landing page, other project) doesn't inherit this project's look.
+      applyTheme(progression.settings.theme);
+
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
       const shell = root.querySelector('.app-shell');
@@ -71,6 +72,15 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             // affect what Play should schedule. Nothing else to do here — the
             // panel and audio scheduler both re-read effective settings on
             // demand.
+          },
+          onSetChordFont(chordFont) {
+            // The header toggle is a shortcut into the same code path project
+            // settings uses. applyProjectSettings persists + re-applies the
+            // theme; the panel re-syncs on the next render.
+            applyProjectSettings({
+              name: currentName,
+              settings: { ...progression.settings, theme: { ...progression.settings.theme, chordFont } },
+            });
           },
         },
       });
@@ -86,11 +96,17 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
                 settings: {
                   tempo: progression.settings.tempo,
                   timeSig: { ...progression.settings.timeSig },
+                  meterType: progression.settings.meterType,
                   key: progression.settings.key,
                   clef: progression.settings.clef,
+                  theme: { ...progression.settings.theme },
                 },
               },
               onSubmit: ({ name, settings }) => applyProjectSettings({ name, settings }),
+              onAccentPreview: (accent) => applyTheme({
+                ...progression.settings.theme,
+                accent,
+              }),
             });
           },
           onAddChord() {
@@ -112,15 +128,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           onSelectSeam(index) {
             selectedSeam = index;
             editor.render({ progression, selectedSeam, projectName: currentName });
-            coach.setContext(coachContextText());
           },
           onSetSeamTechnique(index, techniqueId) {
             progression.seams[index] = techniqueId;
             selectedSeam = index;
-            coach.setEmpty();
             rerender();
           },
-          onExplainSeam(index) { explainSeam(index); },
           onGoHome() {
             navigate(LANDING_HASH);
           },
@@ -138,13 +151,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         callbacks: {
           onPlayToggle: handlePlayToggle,
           onStop: handleStop,
-        },
-      });
-
-      const coach = mountCoachPanel({
-        container: sheetMusic.coachMount,
-        callbacks: {
-          onRetry(retryIndex) { explainSeam(retryIndex); },
         },
       });
 
@@ -168,7 +174,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             progression,
           });
         } catch (error) {
-          transport.setStatus(error.message);
+          console.error(error);
         } finally {
           saveInFlight = false;
         }
@@ -192,6 +198,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         const keyChanged = previous.key !== settings.key;
         const clefChanged = previous.clef !== settings.clef;
         const nameChanged = currentName !== name;
+        const nextTheme = makeTheme(settings.theme);
+        const themeChanged = previous.theme.accent !== nextTheme.accent || previous.theme.chordFont !== nextTheme.chordFont;
 
         currentName = name;
         progression.settings = {
@@ -200,15 +208,20 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           meterType: settings.meterType ?? previous.meterType,
           key: settings.key,
           clef: settings.clef,
+          theme: nextTheme,
         };
+        if (themeChanged) applyTheme(nextTheme);
 
         // Key is spelling only: it never mutates chord.notes. Transposition is
         // a separate future feature. Time signature can invalidate technique
         // seam beat-costs, so those still get re-checked here.
         if (timeSigChanged) resetIneligibleSeams();
-        if (keyChanged || timeSigChanged || clefChanged) coach.setEmpty();
 
-        if (keyChanged || timeSigChanged || clefChanged || nameChanged) {
+        // Theme flips need a rerender so the chord-font toggle syncs its
+        // active pill and the meta pills re-read the accent-derived colors.
+        // (Accent color itself cascades via CSS custom properties without a
+        // rerender, but the segmented toggle stores its state in DOM classes.)
+        if (keyChanged || timeSigChanged || clefChanged || nameChanged || themeChanged) {
           rerender();
         } else {
           scheduleAutosave();
@@ -239,42 +252,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         }
         resetIneligibleSeams();
         editingId = null;
-        coach.setEmpty();
         rerender();
-      }
-
-      // ── Coach flow ──────────────────────────────────────────────────
-      function coachContextText() {
-        if (!progression.seams.length) return 'Add two chords to create a seam that LEGATO can explain.';
-        const from = chordDisplayName(progression.chords[selectedSeam], progression.settings.key);
-        const to = chordDisplayName(progression.chords[selectedSeam + 1], progression.settings.key);
-        const technique = progression.seams[selectedSeam] ? TECHNIQUES[progression.seams[selectedSeam]].name : 'Direct transition';
-        return `${ from } → ${ to } · ${ technique }`;
-      }
-
-      async function explainSeam(index) {
-        selectedSeam = index;
-        editor.render({ progression, selectedSeam, projectName: currentName });
-        coach.setContext(coachContextText());
-        const techniqueId = progression.seams[index];
-        const payload = {
-          fromChord: { name: chordDisplayName(progression.chords[index], progression.settings.key), notes: progression.chords[index].notes },
-          toChord: { name: chordDisplayName(progression.chords[index + 1], progression.settings.key), notes: progression.chords[index + 1].notes },
-          technique: techniqueId ? { id: techniqueId, ...TECHNIQUES[techniqueId] } : 'none',
-          generatedNotes: segments.filter((segment) => segment.seamIndex === index).flatMap((segment) => segment.notes),
-          evidence: buildCoachEvidence(progression, segments, index),
-        };
-        coach.setLoading();
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 20000);
-          const result = await requestCoach(payload, { signal: controller.signal });
-          clearTimeout(timer);
-          coach.setResult(result);
-        } catch (error) {
-          const message = error.name === 'AbortError' ? 'The coach took too long to respond.' : error.message;
-          coach.setError(message, index);
-        }
       }
 
       // ── Transport ───────────────────────────────────────────────────
@@ -292,14 +270,10 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         if (playbackState === 'playing') {
           pausePlayback();
           setPlaybackState('paused');
-          transport.setPulseActive(false);
-          transport.setStatus('Paused');
           sheetMusic.particles.settle({ preserveProgress: true });
         } else if (playbackState === 'paused') {
           resumePlayback();
           setPlaybackState('playing');
-          transport.setPulseActive(true);
-          transport.setStatus('Playing');
           sheetMusic.particles.beginPlayback();
         } else {
           startPlaybackFromStart();
@@ -308,8 +282,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
 
       async function startPlaybackFromStart() {
         transport.setPlayEnabled(false);
-        transport.setPulseActive(true);
-        transport.setStatus('Loading piano…');
         sheetMusic.particles.beginPlayback();
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
@@ -320,14 +292,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             playbackSettings,
             (measure) => {
               sheetMusic.setActiveMeasure(measure);
-              if (measure !== null) transport.setStatus(`Playing measure ${ measure + 1 }`);
             },
             () => {
               sheetMusic.particles.settle();
               setPlaybackState('idle');
               transport.setPlayEnabled(true);
-              transport.setPulseActive(false);
-              transport.setStatus('Playback complete');
             },
             (progress, measure) => sheetMusic.particles.setProgress(progress, measure),
           );
@@ -335,8 +304,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           sheetMusic.particles.settle({ immediate: true });
           setPlaybackState('idle');
           transport.setPlayEnabled(true);
-          transport.setPulseActive(false);
-          transport.setStatus(error.message);
+          console.error(error);
         }
       }
 
@@ -348,8 +316,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
-        transport.setStatus('Stopped');
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
@@ -359,11 +325,9 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
         segments = compile(progression);
         editor.render({ progression, selectedSeam, projectName: currentName });
         sheetMusic.render(segments, progression.settings, progression.chords);
-        coach.setContext(coachContextText());
         scheduleAutosave();
       }
 
@@ -374,6 +338,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           window.removeEventListener('beforeunload', beforeUnload);
           stopPlayback();
           await flushSave();
+          clearTheme();
           root.replaceChildren();
         },
       };

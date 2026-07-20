@@ -6,8 +6,11 @@
 
 .sheet-music-pane {
     min-width: 0;
-    padding: 34px clamp(28px, 4vw, 68px) 64px;
-    background: radial-gradient(circle at 75% 20%, rgba(209, 161, 90, .035), transparent 35%), var(--ink)
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 34px clamp(28px, 4vw, 68px) 34px;
+    background: radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--accent) 3.5%, transparent), transparent 35%), var(--ink)
 }
 
 .sheet-music-header {
@@ -19,9 +22,18 @@
     border-bottom: 1px solid var(--hairline)
 }
 
-.sheet-music-header h2 {
-    font: 340 clamp(2.4rem, 4vw, 4.2rem)/1 var(--font-display);
-    margin: 7px 0 0
+.sheet-music-header > .chord-font-toggle {
+    align-self: center
+}
+
+@media(max-width:650px) {
+    .sheet-music-header > .chord-font-toggle {
+        align-self: flex-start
+    }
+}
+
+.sheet-music-title {
+    flex-shrink: 0
 }
 
 /* Transport row: play/stop + status on the left, tempo/clef overrides pinned
@@ -32,8 +44,7 @@
     display: flex;
     align-items: center;
     gap: 24px;
-    padding: 12px 0 34px;
-    border-bottom: 1px solid var(--hairline)
+    padding: 18px 0 8px
 }
 
 .transport-row > #transport-mount {
@@ -42,90 +53,55 @@
 
 .sheet-music-controls {
     display: flex;
-    gap: 22px;
+    gap: 20px;
     align-items: center;
-    margin-left: auto
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end
 }
 
+/* Each label pairs a small uppercase caption with a shared form control
+   (.tempo-control or .form-select). Slider/input/select styling itself lives
+   in base.css so this panel and the project-settings modal stay in sync. */
 .sheet-music-controls label {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     color: var(--tan-dim);
-    font: 500 .55rem var(--font-mono);
+    font: 500 var(--fs-eyebrow) var(--font-body);
     letter-spacing: .1em;
     text-transform: uppercase
 }
 
 .sheet-music-controls .tempo-control input[type="range"] {
-    width: 200px;
-    accent-color: var(--anchor)
-}
-
-.sheet-music-controls .tempo-value {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px
-}
-
-.sheet-music-controls .tempo-control input[type="number"] {
-    width: 58px;
-    padding: 4px 6px;
-    background: transparent;
-    border: 1px solid var(--hairline);
-    color: var(--ivory);
-    font: 500 .68rem var(--font-mono);
-    text-align: center
-}
-
-.sheet-music-controls .tempo-control input[type="number"]:focus {
-    outline: none;
-    border-color: var(--anchor)
-}
-
-.sheet-music-controls .tempo-control small {
-    color: var(--tan-dim);
-    font: 400 .52rem var(--font-mono);
-    letter-spacing: .1em;
-    text-transform: uppercase
-}
-
-.sheet-music-controls .clef-control select {
-    padding: 5px 8px;
-    background: transparent;
-    border: 1px solid var(--hairline);
-    color: var(--ivory);
-    font: 500 .68rem var(--font-mono);
-    letter-spacing: .04em;
-    cursor: pointer
-}
-
-.sheet-music-controls .clef-control select:focus {
-    outline: none;
-    border-color: var(--anchor)
+    /* The toolbar uses a fixed-width slider; the modal lets it stretch. */
+    flex: 0 0 auto;
+    width: 200px
 }
 
 .sheet-music-zoom-control {
     position: absolute;
     z-index: 6;
-    top: 12px;
-    right: 14px;
+    top: 18px;
+    right: 20px;
     display: inline-flex;
     align-items: center;
-    gap: 2px;
-    padding: 3px;
+    gap: 4px;
+    padding: 5px;
     border: 1px solid var(--hairline);
-    background: rgba(23, 18, 14, .55);
-    backdrop-filter: blur(4px)
+    border-radius: var(--radius-pill);
+    background: rgba(23, 18, 14, .68);
+    backdrop-filter: blur(6px)
 }
 
 .sheet-music-zoom-control button {
-    width: 24px;
-    height: 24px;
+    width: 34px;
+    height: 34px;
     border: 0;
+    border-radius: 50%;
     background: transparent;
     color: var(--tan);
-    font: 500 .82rem var(--font-mono);
+    font: 500 .82rem var(--font-body);
     line-height: 1;
     cursor: pointer;
     transition: color .18s, background .18s
@@ -133,7 +109,7 @@
 
 .sheet-music-zoom-control button:hover:not(:disabled) {
     color: var(--ivory);
-    background: rgba(209, 161, 90, .12)
+    background: color-mix(in srgb, var(--accent) 14%, transparent)
 }
 
 .sheet-music-zoom-control button:disabled {
@@ -141,29 +117,37 @@
     cursor: not-allowed
 }
 
+.sheet-music-zoom-control .ui-icon {
+    width: 18px;
+    height: 18px
+}
+
 .sheet-music-zoom-control output {
-    min-width: 46px;
+    min-width: 52px;
     text-align: center;
     color: var(--tan);
-    font: 500 .56rem var(--font-mono);
-    letter-spacing: .06em;
-    text-transform: uppercase
+    font: 600 .74rem var(--font-body);
+    letter-spacing: .06em
 }
 
 /* Notation stage — the notation remains semantic VexFlow, while this layer
-   gives the compiled material a restrained sand-hologram presence. */
+   gives the compiled material a restrained sand-hologram presence. Grows
+   to fill the vertical space of the sheet-music pane so the sheet occupies
+   the full right column instead of hugging the top. */
 .notation-stage {
     position: relative;
     --sheet-music-progress: 0%;
+    flex: 1;
     min-height: 390px;
-    margin: 34px 0 22px;
-    padding: 54px 0 42px;
+    margin: 28px 0 0;
+    padding: 64px 0 48px;
     display: flex;
     align-items: center;
     border: 1px solid rgba(196, 167, 126, .11);
+    border-radius: var(--radius-card);
     background:
-        linear-gradient(90deg, rgba(209, 161, 90, .025) 1px, transparent 1px) 0 0 / 64px 100%,
-        radial-gradient(ellipse at 24% 46%, rgba(209, 161, 90, .075), transparent 34%),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 2.5%, transparent) 1px, transparent 1px) 0 0 / 64px 100%,
+        radial-gradient(ellipse at 24% 46%, color-mix(in srgb, var(--accent) 7.5%, transparent), transparent 34%),
         linear-gradient(180deg, rgba(23, 18, 14, .24), rgba(5, 4, 3, .08));
     box-shadow:
         inset 0 1px rgba(230, 206, 170, .035),
@@ -180,8 +164,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-        linear-gradient(135deg, rgba(209, 161, 90, .1), transparent 16px) top left / 42px 42px no-repeat,
-        linear-gradient(315deg, rgba(209, 161, 90, .08), transparent 16px) bottom right / 42px 42px no-repeat;
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 16px) top left / 42px 42px no-repeat,
+        linear-gradient(315deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 16px) bottom right / 42px 42px no-repeat;
     opacity: .55
 }
 
@@ -192,7 +176,7 @@
     left: 22%;
     top: 50%;
     transform: translateY(-50%);
-    background: radial-gradient(circle, rgba(209, 161, 90, .08), transparent 67%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--accent) 8%, transparent), transparent 67%);
     pointer-events: none;
     transition: opacity .7s, transform .9s;
     opacity: .8
@@ -255,7 +239,7 @@
 
 .sheet-music .notice {
     color: var(--tan-dim);
-    font: italic 1rem var(--font-display);
+    font: italic 500 var(--fs-copy) var(--font-body);
     padding: 90px 20px;
     text-align: center
 }
@@ -265,7 +249,7 @@
 }
 
 .measure-group.is-playing {
-    filter: drop-shadow(0 0 7px rgba(209, 161, 90, .72));
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 72%, transparent));
     opacity: 1
 }
 
@@ -290,8 +274,8 @@
     display: block;
     width: var(--sheet-music-progress);
     height: 100%;
-    background: linear-gradient(90deg, rgba(122, 102, 75, .22), var(--anchor));
-    box-shadow: 0 0 14px rgba(209, 161, 90, .46);
+    background: linear-gradient(90deg, rgba(122, 102, 75, .22), var(--accent));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 46%, transparent);
     transition: width 80ms linear
 }
 
@@ -304,7 +288,7 @@
     height: 5px;
     border-radius: 50%;
     background: var(--ivory);
-    box-shadow: 0 0 12px var(--anchor);
+    box-shadow: 0 0 12px var(--accent);
     transform: translate(50%, -50%)
 }
 
@@ -316,8 +300,8 @@
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--anchor);
-    box-shadow: 0 0 10px rgba(209, 161, 90, .72);
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 72%, transparent);
     transform: translate(50%, -50%)
 }
 
@@ -335,7 +319,8 @@
 
 @media(max-width:1000px) {
     .sheet-music-pane {
-        padding: 30px 24px 60px
+        min-height: auto;
+        padding: 30px 24px 30px
     }
 
     .sheet-music-header {
@@ -343,7 +328,8 @@
     }
 
     .notation-stage {
-        min-height: 300px
+        flex: 0 0 auto;
+        min-height: 340px
     }
 }
 
@@ -363,16 +349,16 @@
     }
 
     .sheet-music-controls .tempo-control input[type="range"] {
-        width: 140px
+        width: 170px
     }
 
     .notation-stage {
-        min-height: 310px;
-        padding-top: 48px
+        min-height: 320px;
+        padding-top: 56px
     }
 
     .sheet-music-zoom-control {
-        top: 8px;
-        right: 8px
+        top: 12px;
+        right: 12px
     }
 }

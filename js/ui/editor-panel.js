@@ -9,38 +9,38 @@
  * by the pencil button — they no longer have inline controls here.
  */
 import { availableBeats, beatChoicesForMeter, chordTotalBeats, barsToBeats, beatsToBars, isTechniqueUsable } from '../state.js';
-import { chordDisplayName, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
+import { chordDisplayName, formatChordSymbol, noteName, chordToneName, chordSpellingIdentity } from '../engine/chords.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { escapeHtml } from '../util/html.js';
+import { majorKeyName, timeSigLabel, tempoLabel } from '../util/labels.js';
+import { icon } from './icons.js';
 
 const TEMPLATE = `
 <header class="brand-block">
   <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
-    <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span class="brand-mark" aria-hidden="true"></span>
     <span class="brand-copy"><span class="brand">LEGATO</span>
       <span class="brand-subtitle">Progression coach</span>
     </span>
   </button>
-  <button id="view-all-projects" class="text-action view-all-projects" type="button">View all projects</button>
+  <button id="view-all-projects" class="text-action view-all-projects" type="button">${ icon('home') }<span>All projects</span></button>
 </header>
 
 <div class="editor-scroll">
   <section class="project-title-block">
-    <p class="kicker">Project</p>
     <div class="project-title-row">
       <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
-      <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 4.5 5 5-9.5 9.5H5v-5z"></path><path d="m12.5 6.5 5 5"></path></svg>
-        <span>Edit Project Settings</span>
+      <button id="edit-project-settings" class="edit-project-settings" type="button">
+        ${ icon('edit') }<span>Edit Project Settings</span>
       </button>
     </div>
+    <div id="project-meta-pills" class="project-meta-pills"></div>
   </section>
 
   <section class="editor-section" aria-labelledby="chords-title">
     <div class="section-title">
-      <h2 id="chords-title">Chord material</h2><button id="add-chord" class="text-action">+ Add chord</button>
+      <h2 id="chords-title" class="section-heading">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
     </div>
-    <div class="table-head"><span>Voicing</span><span>Beats</span><span></span></div>
     <div id="progression-list" class="progression-list"></div>
   </section>
 </div>
@@ -50,12 +50,15 @@ export function mountEditorPanel({ container, callbacks }) {
   container.classList.add('editor-pane');
   container.innerHTML = TEMPLATE;
 
+  const editorScrollEl = container.querySelector('.editor-scroll');
   const progressionListEl = container.querySelector('#progression-list');
+  const chordsSectionEl = progressionListEl.closest('.editor-section');
   const addChordBtn = container.querySelector('#add-chord');
   const brandHomeBtn = container.querySelector('#brand-home');
   const viewAllBtn = container.querySelector('#view-all-projects');
   const projectNameInput = container.querySelector('#project-name-input');
   const editSettingsBtn = container.querySelector('#edit-project-settings');
+  const metaPillsEl = container.querySelector('#project-meta-pills');
   const expandedSeamIndexes = new Set();
   let directEditorOpenForCurrentRender = null;
 
@@ -72,7 +75,6 @@ export function mountEditorPanel({ container, callbacks }) {
   function makeChordRow(progression, chord, index) {
     const timeSig = progression.settings.timeSig;
     const beatChoices = beatChoicesForMeter(timeSig);
-    const beatLabel = (beats) => beats === 0.5 ? '½' : beats === 1.5 ? '1½' : String(beats);
     const row = document.createElement('article');
     row.className = 'chord-row';
     const identity = chordSpellingIdentity(chord);
@@ -82,11 +84,28 @@ export function mountEditorPanel({ container, callbacks }) {
     const currentBeats = Number(barsToBeats(chord.bars, timeSig).toFixed(4));
     const options = beatChoices.includes(currentBeats) ? beatChoices : [...beatChoices, currentBeats].sort((a, b) => a - b);
     const displayName = escapeHtml(chordDisplayName(chord, progression.settings.key));
-    row.innerHTML = `<button class="chord-main" aria-label="Edit ${ displayName }"><strong>${ displayName }</strong><small>${ escapeHtml(notes) }</small></button><select class="chord-bars" aria-label="Beats for ${ displayName }">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ beatLabel(beats) }</option>`).join('') }</select><button class="delete-button" aria-label="Delete ${ displayName }">×</button>`;
+    const glyphHtml = renderChordGlyph(formatChordSymbol(chord, progression.settings.key));
+    row.innerHTML = `<button class="chord-main" aria-label="Edit ${ displayName }"><strong class="chord-glyph">${ glyphHtml }</strong><small>${ escapeHtml(notes) }</small></button><label class="chord-beats" aria-label="Beats for ${ displayName }"><span class="chord-beats-display" aria-hidden="true">${ formatBeatDisplay(currentBeats) } <em>${ currentBeats === 1 ? 'beat' : 'beats' }</em></span><select class="chord-beats-select">${ options.map((beats) => `<option value="${ beats }" ${ beats === currentBeats ? 'selected' : '' }>${ formatBeatDisplay(beats) }</option>`).join('') }</select></label><button class="delete-button" aria-label="Delete ${ displayName }">${ icon('trash') }</button>`;
     row.querySelector('.chord-main').onclick = () => callbacks.onEditChord(chord);
-    row.querySelector('.chord-bars').onchange = (event) => callbacks.onSetChordBeats(chord, Number(event.target.value));
+    row.querySelector('.chord-beats-select').onchange = (event) => callbacks.onSetChordBeats(chord, Number(event.target.value));
     row.querySelector('.delete-button').onclick = () => callbacks.onDeleteChord(chord);
     return row;
+  }
+
+  function renderChordGlyph({ root, baseline, marker, suffix, superscript, plain }) {
+    if (!root) return escapeHtml(plain);
+    const rootHtml = escapeHtml(root);
+    const baselineHtml = baseline ? escapeHtml(baseline) : '';
+    const markerHtml = marker ? `<sup class="chord-quality-marker">${ escapeHtml(marker) }</sup>` : '';
+    const suffixHtml = suffix ? `<sup class="chord-quality-suffix">${ escapeHtml(suffix) }</sup>` : '';
+    const supHtml = superscript ? `<sup>${ escapeHtml(superscript) }</sup>` : '';
+    return `${ rootHtml }${ baselineHtml }${ markerHtml }${ suffixHtml }${ supHtml }`;
+  }
+
+  function formatBeatDisplay(beats) {
+    if (beats === 0.5) return '½';
+    if (beats === 1.5) return '1½';
+    return String(beats);
   }
 
   function formatBeatCost(beats) {
@@ -118,8 +137,8 @@ export function mountEditorPanel({ container, callbacks }) {
     seam.className = `transition-seam ${ selectedTechnique ? 'has-technique' : 'is-direct' } ${ selectedSeam === index ? 'selected' : '' } ${ isOpen ? 'is-open' : '' }`;
     const toggleLabel = selectedTechnique
       ? `${ escapeHtml(selectedTechnique.name) } · ${ formatBeatCost(selectedTechnique.beatCost) }`
-      : '+ Add transition';
-    seam.innerHTML = `<div class="transition-connector"><button class="transition-toggle" type="button" aria-expanded="${ isOpen }"><span class="transition-rule" aria-hidden="true"></span><span class="transition-label">${ toggleLabel }</span><span class="transition-rule" aria-hidden="true"></span></button><button class="transition-explain" type="button">Explain</button></div>${ isOpen ? `<div class="transition-editor"><div class="transition-editor-copy"><strong>${ fromName } → ${ toName }</strong><small>${ budget } beat${ budget === 1 ? '' : 's' } available in the departing tail</small></div><label>Technique <select class="transition-select" aria-label="Technique for ${ fromName } to ${ toName }"></select></label></div>` : '' }`;
+      : `${ icon('plus', 'transition-label-icon') } Add transition`;
+    seam.innerHTML = `<div class="transition-connector"><button class="transition-toggle" type="button" aria-expanded="${ isOpen }"><span class="transition-rule" aria-hidden="true"></span><span class="transition-label">${ toggleLabel }</span><span class="transition-rule" aria-hidden="true"></span></button></div>${ isOpen ? `<div class="transition-editor"><div class="transition-editor-copy"><small>${ budget } beat${ budget === 1 ? '' : 's' } available in the departing tail</small></div><label>Technique <select class="transition-select" aria-label="Technique for ${ fromName } to ${ toName }"></select></label></div>` : '' }`;
     const toggle = seam.querySelector('.transition-toggle');
     toggle.onclick = () => {
       if (isOpen) {
@@ -132,7 +151,6 @@ export function mountEditorPanel({ container, callbacks }) {
       }
       callbacks.onSelectSeam(index);
     };
-    seam.querySelector('.transition-explain').onclick = () => callbacks.onExplainSeam(index);
     const select = seam.querySelector('.transition-select');
     if (select) {
       addTechniqueOptions(select, techniques, fromChord, progression.settings.timeSig, budget);
@@ -150,8 +168,11 @@ export function mountEditorPanel({ container, callbacks }) {
 
   function renderProgression(progression, selectedSeam) {
     progressionListEl.replaceChildren();
-    if (!progression.chords.length) {
-      progressionListEl.innerHTML = '<div class="empty-state">No material yet. Add a chord and choose its exact piano voicing.</div>';
+    const isEmpty = !progression.chords.length;
+    editorScrollEl.classList.toggle('editor-scroll--empty', isEmpty);
+    chordsSectionEl.classList.toggle('editor-section--empty', isEmpty);
+    if (isEmpty) {
+      progressionListEl.append(makeEmptyState());
       return;
     }
     expandedSeamIndexes.forEach((index) => {
@@ -168,6 +189,48 @@ export function mountEditorPanel({ container, callbacks }) {
     });
   }
 
+  function renderMetaPills(settings) {
+    metaPillsEl.replaceChildren();
+    const pills = [
+      { label: timeSigLabel(settings.timeSig), variant: 'filled' },
+      { label: majorKeyName(settings.key), variant: 'outline' },
+      { label: tempoLabel(settings.tempo), variant: 'outline' },
+    ];
+    for (const pill of pills) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = `meta-pill meta-pill--${ pill.variant }`;
+      el.textContent = pill.label;
+      el.setAttribute('aria-label', `Edit project settings: ${ pill.label }`);
+      el.onclick = () => callbacks.onEditProjectSettings();
+      metaPillsEl.append(el);
+    }
+  }
+
+  function makeEmptyState() {
+    // See css/editor-pane.css `.empty-state` for the treatment. The
+    // Tenutino SVG is a rough placeholder — the design handoff calls for a
+    // sourced illustration in the same abstract-line-art style before ship.
+    const el = document.createElement('div');
+    el.className = 'empty-state';
+    el.innerHTML = `
+      <div class="empty-state-illustration" aria-hidden="true">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="50" cy="62" rx="26" ry="30" fill="currentColor"></ellipse>
+          <path d="M22 40 C20 26 32 12 50 12 C68 12 82 24 78 42 C82 34 74 52 68 46 C64 42 60 38 50 40 C40 42 32 46 32 48 C30 44 24 46 22 40 Z" fill="var(--panel-3)"></path>
+          <circle cx="42" cy="60" r="2" fill="var(--ink)"></circle>
+          <circle cx="58" cy="60" r="2" fill="var(--ink)"></circle>
+          <path d="M45 72 Q50 74 55 72" stroke="var(--ink)" stroke-width="1.6" fill="none" stroke-linecap="round"></path>
+        </svg>
+      </div>
+      <div class="empty-state-copy">
+        <h3 class="empty-state-headline">Tenutino is waiting.</h3>
+        <p class="empty-state-subcopy">Add a chord to begin!</p>
+      </div>
+    `;
+    return el;
+  }
+
   function syncProjectName(name) {
     // Don't overwrite while the user is actively editing.
     if (document.activeElement === projectNameInput) return;
@@ -178,6 +241,7 @@ export function mountEditorPanel({ container, callbacks }) {
   return {
     render({ progression, selectedSeam, projectName }) {
       syncProjectName(projectName);
+      renderMetaPills(progression.settings);
       renderProgression(progression, selectedSeam);
     },
   };

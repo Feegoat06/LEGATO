@@ -8,13 +8,15 @@
  * externally (via project settings), the override is cleared so the panel
  * reflects the new source of truth.
  *
- * The transport and coach panels are siblings inside <main class="sheet-
- * music-pane"> — this module mounts them via the exposed `transportMount` /
- * `coachMount` refs so editor-view can wire them separately.
+ * The transport controls are mounted into this panel through the exposed
+ * `transportMount` reference so editor-view can wire them separately.
  */
 import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
-import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
+import { TEMPO_MIN, TEMPO_MAX, CHORD_FONTS } from '../state.js';
+import { icon } from './icons.js';
+
+const CHORD_FONT_LABELS = { jazztext: 'JazzText', classical: 'Classical' };
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.5;
@@ -22,17 +24,17 @@ const ZOOM_STEP = 0.1;
 
 const TEMPLATE = `
 <header class="sheet-music-header">
-  <div class="sheet-music-title">
-    <p class="kicker">Compiled sheet music</p>
-    <h2>Your Progression!</h2>
+  <h2 class="section-heading sheet-music-title">Sheet Music</h2>
+  <div id="sheet-music-chord-font-toggle" class="chord-font-toggle" role="radiogroup" aria-label="Chord symbol font">
+    ${ CHORD_FONTS.map((font) => `<button type="button" class="chord-font-option" data-chord-font="${ font }" role="radio" aria-checked="false">${ CHORD_FONT_LABELS[font] }</button>`).join('') }
   </div>
 </header>
 
 <section class="notation-stage" aria-label="Progression notation">
   <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
-    <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">−</button>
+    <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">${ icon('minus') }</button>
     <output id="sheet-music-zoom-value" aria-live="polite">100%</output>
-    <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">${ icon('plus') }</button>
   </div>
   <div class="staff-glow" aria-hidden="true"></div>
   <div id="sheet-music-layer" class="sheet-music-layer">
@@ -45,17 +47,17 @@ const TEMPLATE = `
 <div class="transport-row">
   <div id="transport-mount"></div>
   <div class="sheet-music-controls">
-    <label class="tempo-control">
+    <label>
       <span>Tempo</span>
-      <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
-      <span class="tempo-value">
+      <div class="tempo-control">
+        <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
         <input id="sheet-music-tempo-input" type="number" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" inputmode="numeric" />
         <small>BPM</small>
-      </span>
+      </div>
     </label>
-    <label class="clef-control">
+    <label>
       <span>Clef</span>
-      <select id="sheet-music-clef">
+      <select id="sheet-music-clef" class="form-select">
         <option value="auto">Auto</option>
         <option value="treble">Treble</option>
         <option value="bass">Bass</option>
@@ -63,7 +65,6 @@ const TEMPLATE = `
     </label>
   </div>
 </div>
-<div id="coach-mount"></div>
 `;
 
 export function mountSheetMusicPanel({ container, callbacks = {} }) {
@@ -80,6 +81,21 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const tempoSliderEl = container.querySelector('#sheet-music-tempo-slider');
   const tempoInputEl = container.querySelector('#sheet-music-tempo-input');
   const clefSelectEl = container.querySelector('#sheet-music-clef');
+  const chordFontToggleEl = container.querySelector('#sheet-music-chord-font-toggle');
+
+  chordFontToggleEl.onclick = (event) => {
+    const btn = event.target.closest('.chord-font-option');
+    if (!btn) return;
+    callbacks.onSetChordFont?.(btn.dataset.chordFont);
+  };
+
+  function syncChordFontToggle(chordFont) {
+    chordFontToggleEl.querySelectorAll('.chord-font-option').forEach((el) => {
+      const active = el.dataset.chordFont === chordFont;
+      el.classList.toggle('is-active', active);
+      el.setAttribute('aria-checked', String(active));
+    });
+  }
 
   let zoom = 1;
   let resizeFrame = 0;
@@ -186,7 +202,6 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
 
   return {
     transportMount: container.querySelector('#transport-mount'),
-    coachMount: container.querySelector('#coach-mount'),
     particles,
     render(segments, settings, chords = []) {
       currentSegments = segments;
@@ -199,6 +214,7 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
       effectiveSettings = computeEffectiveSettings();
       syncTempoInputs(effectiveSettings.tempo);
       clefSelectEl.value = effectiveSettings.clef;
+      syncChordFontToggle(settings.theme.chordFont);
       drawSheetMusic();
     },
     setActiveMeasure(index) {

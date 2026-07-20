@@ -14,7 +14,7 @@
  * for Trash. `null` means active; ISO string means trashed. Export drops the
  * field so on-disk export files stay on the schema in docs/data-model.md §0.
  */
-import { SCHEMA_VERSION, newId, validateProgression } from './state.js';
+import { SCHEMA_VERSION, newId, makeProgression, makeSettings, validateProgression } from './state.js';
 import { DEMO_PROJECTS } from './data/demo-projects.js';
 
 const STORAGE_KEY = 'legato.projects';
@@ -31,7 +31,7 @@ export function createProjectStore({ storage = defaultStorage() } = {}) {
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(normalizeStoredProject) : [];
     } catch {
       return [];
     }
@@ -240,10 +240,31 @@ function byUpdatedDesc(a, b) {
 }
 
 function emptyProgression() {
+  return makeProgression();
+}
+
+/**
+ * Normalize a project shape loaded from localStorage against the current
+ * Settings contract. Pre-revamp projects lack `theme` (accent + chordFont);
+ * without this, editor-view's applyTheme() crashes on undefined access.
+ *
+ * We only patch `settings` — chords/seams already went through
+ * `validateProgression` on save, and touching them here would re-run that
+ * cost on every read. Migration is lazy: the normalized shape only reaches
+ * disk on the next mutation, so unopened projects stay bit-identical.
+ */
+function normalizeStoredProject(project) {
+  if (!project?.progression?.settings) return project;
+  const settings = project.progression.settings;
+  const normalizedSettings = makeSettings(settings);
+  if (settings.theme?.accent && settings.theme?.chordFont
+    && settings.meterType === normalizedSettings.meterType) return project;
   return {
-    settings: { tempo: 100, timeSig: { num: 4, den: 4 }, meterType: 'simple', key: 0, clef: 'auto' },
-    chords: [],
-    seams: [],
+    ...project,
+    progression: {
+      ...project.progression,
+      settings: normalizedSettings,
+    },
   };
 }
 
