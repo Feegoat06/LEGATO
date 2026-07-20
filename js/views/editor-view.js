@@ -14,7 +14,7 @@
  * On top of every mutation, `scheduleAutosave()` debounces a write to the
  * ProjectStore so localStorage stays in sync without a manual save button.
  */
-import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
+import { compile, makeChord, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
 import { chordDisplayName } from '../engine/chords.js';
 import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
@@ -30,6 +30,7 @@ import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
 import { mountTransport } from '../ui/transport.js';
+import { applyTheme, clearTheme } from '../theme.js';
 import { mountTutorChat } from '../ui/tutor-chat.js';
 import {
   lastMeasureForSource,
@@ -44,11 +45,14 @@ import { navigate, LANDING_HASH } from '../router.js';
 const SHELL_TEMPLATE = `
   <div class="app-shell">
     <aside id="editor-pane-mount"></aside>
+    <div id="panel-resizer" class="panel-resizer" role="separator" aria-label="Resize editor and notation panels" aria-orientation="vertical" aria-controls="editor-pane-mount sheet-music-pane-mount" tabindex="0"></div>
     <main id="sheet-music-pane-mount"></main>
   </div>
 `;
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
+const MIN_EDITOR_PANE_WIDTH = 410;
+const MIN_SHEET_MUSIC_PANE_WIDTH = 480;
 
 /**
  * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, projectSettingsDialog: any }} deps
@@ -73,9 +77,93 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let latestTenutinoContext = null;
       const initialTenutinoContext = loadTenutinoContext(params.id, progression);
 
+      // Apply per-project accent + chord-font to the document root so every
+      // panel restyles instantly. Cleared on unmount so navigating away
+      // (landing page, other project) doesn't inherit this project's look.
+      applyTheme(progression.settings.theme);
+
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
       const shell = root.querySelector('.app-shell');
+      const editorPaneMount = shell.querySelector('#editor-pane-mount');
+      const panelResizer = shell.querySelector('#panel-resizer');
+      let activeResizePointerId = null;
+
+      function isSideBySideLayout() {
+        return !window.matchMedia('(max-width: 1000px)').matches;
+      }
+
+      function getPaneResizeBounds() {
+        const shellBounds = shell.getBoundingClientRect();
+        const splitterWidth = panelResizer.getBoundingClientRect().width;
+        return {
+          left: shellBounds.left,
+          min: MIN_EDITOR_PANE_WIDTH,
+          max: Math.max(MIN_EDITOR_PANE_WIDTH, shellBounds.width - splitterWidth - MIN_SHEET_MUSIC_PANE_WIDTH),
+        };
+      }
+
+      function syncPanelResizer() {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const explicitWidth = Number.parseFloat(shell.style.getPropertyValue('--editor-pane-width'));
+        if (Number.isFinite(explicitWidth)) {
+          const clampedWidth = Math.min(max, Math.max(min, explicitWidth));
+          if (clampedWidth !== explicitWidth) shell.style.setProperty('--editor-pane-width', `${ clampedWidth }px`);
+        }
+        const editorWidth = Math.round(editorPaneMount.getBoundingClientRect().width);
+        panelResizer.setAttribute('aria-valuemin', String(min));
+        panelResizer.setAttribute('aria-valuemax', String(max));
+        panelResizer.setAttribute('aria-valuenow', String(editorWidth));
+        panelResizer.setAttribute('aria-valuetext', `Editor panel width ${ editorWidth } pixels`);
+      }
+
+      function setEditorPaneWidth(width) {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const nextWidth = Math.round(Math.min(max, Math.max(min, width)));
+        shell.style.setProperty('--editor-pane-width', `${ nextWidth }px`);
+        syncPanelResizer();
+      }
+
+      function stopPanelResize() {
+        activeResizePointerId = null;
+        shell.classList.remove('is-resizing');
+      }
+
+      panelResizer.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || !isSideBySideLayout()) return;
+        event.preventDefault();
+        activeResizePointerId = event.pointerId;
+        panelResizer.setPointerCapture(event.pointerId);
+        shell.classList.add('is-resizing');
+        const { left } = getPaneResizeBounds();
+        setEditorPaneWidth(event.clientX - left);
+      });
+      panelResizer.addEventListener('pointermove', (event) => {
+        if (event.pointerId !== activeResizePointerId) return;
+        const { left } = getPaneResizeBounds();
+        setEditorPaneWidth(event.clientX - left);
+      });
+      panelResizer.addEventListener('pointerup', stopPanelResize);
+      panelResizer.addEventListener('pointercancel', stopPanelResize);
+      panelResizer.addEventListener('lostpointercapture', stopPanelResize);
+      panelResizer.addEventListener('keydown', (event) => {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const currentWidth = editorPaneMount.getBoundingClientRect().width;
+        const step = event.shiftKey ? 80 : 24;
+        const nextWidth = event.key === 'ArrowLeft' ? currentWidth - step
+          : event.key === 'ArrowRight' ? currentWidth + step
+            : event.key === 'Home' ? min
+              : event.key === 'End' ? max
+                : null;
+        if (nextWidth == null) return;
+        event.preventDefault();
+        setEditorPaneWidth(nextWidth);
+      });
+      window.addEventListener('resize', syncPanelResizer);
+      requestAnimationFrame(syncPanelResizer);
 
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
@@ -109,11 +197,17 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
                 settings: {
                   tempo: progression.settings.tempo,
                   timeSig: { ...progression.settings.timeSig },
+                  meterType: progression.settings.meterType,
                   key: progression.settings.key,
                   clef: progression.settings.clef,
+                  theme: { ...progression.settings.theme },
                 },
               },
               onSubmit: ({ name, settings }) => applyProjectSettings({ name, settings }),
+              onAccentPreview: (accent) => applyTheme({
+                ...progression.settings.theme,
+                accent,
+              }),
             });
           },
           onAddChord() {
@@ -126,6 +220,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           },
           onDeleteChord(chord) {
             replaceChords(progression.chords.filter((item) => item.id !== chord.id));
+          },
+          onReorderChords(orderedIds) {
+            const byId = new Map(progression.chords.map((c) => [c.id, c]));
+            const nextChords = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+            if (nextChords.length !== progression.chords.length) return;
+            replaceChords(nextChords);
           },
           onSetChordBeats(chord, beats) {
             chord.bars = beatsToBars(beats, progression.settings.timeSig);
@@ -142,7 +242,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             selectedSeam = index;
             rerender({ type: 'seam', index });
           },
-          onExplainSeam(index) { explainSeam(index); },
           onGoHome() {
             navigate(LANDING_HASH);
           },
@@ -192,7 +291,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             progression,
           });
         } catch (error) {
-          transport.setStatus(error.message);
+          console.error(error);
         } finally {
           saveInFlight = false;
         }
@@ -216,20 +315,30 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         const keyChanged = previous.key !== settings.key;
         const clefChanged = previous.clef !== settings.clef;
         const nameChanged = currentName !== name;
+        const nextTheme = makeTheme(settings.theme);
+        const themeChanged = previous.theme.accent !== nextTheme.accent || previous.theme.chordFont !== nextTheme.chordFont;
 
         currentName = name;
         progression.settings = {
           tempo: settings.tempo,
           timeSig: { ...settings.timeSig },
+          meterType: settings.meterType ?? previous.meterType,
           key: settings.key,
           clef: settings.clef,
+          theme: nextTheme,
         };
+        if (themeChanged) applyTheme(nextTheme);
 
         // Key is spelling only: it never mutates chord.notes. Transposition is
         // a separate future feature. Time signature can invalidate technique
         // seam beat-costs, so those still get re-checked here.
         if (timeSigChanged) resetIneligibleSeams();
-        if (keyChanged || timeSigChanged || clefChanged || nameChanged) {
+
+        // Theme flips need a rerender so the chord-font toggle syncs its
+        // active pill and the meta pills re-read the accent-derived colors.
+        // (Accent color itself cascades via CSS custom properties without a
+        // rerender, but the segmented toggle stores its state in DOM classes.)
+        if (keyChanged || timeSigChanged || clefChanged || nameChanged || themeChanged) {
           rerender();
         } else {
           scheduleAutosave();
@@ -249,6 +358,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
 
       function saveChord(input) {
         let changedChordId;
+        let addedChord = null;
         if (editingId) {
           const chord = progression.chords.find((item) => item.id === editingId);
           const { hint: _oldHint, ...withoutHint } = chord;
@@ -256,17 +366,18 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           if (!input.hint) delete chord.hint;
           changedChordId = chord.id;
         } else {
-          const chord = makeChord(input.notes, input.bars, input.hint);
-          progression.chords.push(chord);
+          addedChord = makeChord(input.notes, input.bars, input.hint);
+          progression.chords.push(addedChord);
           if (progression.chords.length > 1) progression.seams.push(null);
-          changedChordId = chord.id;
+          changedChordId = addedChord.id;
         }
         resetIneligibleSeams();
         editingId = null;
         rerender({ type: 'chord', chordId: changedChordId });
+        if (addedChord) editor.animateAddedChord(addedChord.id);
       }
 
-      // ── Coach flow ──────────────────────────────────────────────────
+      // ── Coach / tutor flow ──────────────────────────────────────────
       function coachContextText() {
         if (!progression.seams.length) return 'Add two chords to create a seam that LEGATO can explain.';
         const from = chordDisplayName(progression.chords[selectedSeam], progression.settings.key);
@@ -375,16 +486,12 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           setPlaybackState('paused');
           sheetMusic.tenutino.setPlaying(false);
           tutorChat.setPlaybackActive(false);
-          transport.setPulseActive(false);
-          transport.setStatus('Paused');
           sheetMusic.particles.settle({ preserveProgress: true });
         } else if (playbackState === 'paused') {
           resumePlayback();
           setPlaybackState('playing');
           sheetMusic.tenutino.setPlaying(true, sheetMusic.getEffectiveSettings()?.tempo);
           tutorChat.setPlaybackActive(true);
-          transport.setPulseActive(true);
-          transport.setStatus('Playing');
           sheetMusic.particles.beginPlayback({ resume: true });
         } else {
           startPlaybackFromStart();
@@ -394,8 +501,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       async function startPlaybackFromStart() {
         const request = ++playbackRequest;
         transport.setPlayEnabled(false);
-        transport.setPulseActive(true);
-        transport.setStatus('Preparing playback…');
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
           await Promise.all([
@@ -413,7 +518,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
             playbackSettings,
             (measure) => {
               sheetMusic.setActiveMeasure(measure);
-              if (measure !== null) transport.setStatus(`Playing measure ${ measure + 1 }`);
             },
             () => {
               sheetMusic.particles.settle();
@@ -423,8 +527,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
               tutorChat.setPlaybackActive(false);
               setPlaybackState('idle');
               transport.setPlayEnabled(true);
-              transport.setPulseActive(false);
-              transport.setStatus('Playback complete');
             },
             (progress, measure, measureProgress, measureDurationSeconds) => {
               sheetMusic.particles.setProgress(progress, measure, measureProgress);
@@ -443,8 +545,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           tutorChat.setPlaybackActive(false);
           setPlaybackState('idle');
           transport.setPlayEnabled(true);
-          transport.setPulseActive(false);
-          transport.setStatus(error.message);
+          console.error(error);
         }
       }
 
@@ -461,8 +562,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
-        transport.setStatus('Stopped');
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
@@ -476,7 +575,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
-        transport.setPulseActive(false);
         segments = compile(progression);
         editor.render({ progression, selectedSeam, projectName: currentName });
         sheetMusic.render(segments, progression.settings, progression.chords);
@@ -492,11 +590,15 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         async unmount() {
           playbackRequest++;
           window.removeEventListener('beforeunload', beforeUnload);
+          window.removeEventListener('resize', syncPanelResizer);
           stopPlayback();
           tutorRequestController?.abort();
           sheetMusic.tenutino.destroy();
           tutorChat.destroy();
           await flushSave();
+          editor.unmount?.();
+          sheetMusic.unmount?.();
+          clearTheme();
           root.replaceChildren();
         },
       };

@@ -4,16 +4,16 @@
  * The single page a user lands on when opening the app (unless the router's
  * time-guarded resume sends them straight back into the editor). Sections:
  *
- *   1. Hero               — brand + tagline; animation slot for later.
- *   2. Actions row        — New project, Import…, Export all.
- *   3. Recent projects    — user's active projects, sorted by updatedAt desc.
- *   4. Demo projects      — read from js/data/demo-projects.js; opening one
+ *   1. Actions row        — New project, Import…, Export all.
+ *   2. Recent projects    — user's active projects, sorted by updatedAt desc.
+ *   3. Demo projects      — read from js/data/demo-projects.js; opening one
  *                            clones it into localStorage as a new project.
- *   5. Trash              — collapsible; Restore / Delete permanently.
+ *   4. Trash              — collapsible; Restore / Delete permanently.
  *
  * DOM lives here. The view module wires callbacks up to the store.
  */
 import { escapeHtml } from '../util/html.js';
+import { icon } from './icons.js';
 
 const TEMPLATE = `
 <div class="landing-shell">
@@ -22,21 +22,15 @@ const TEMPLATE = `
       <img class="brand-mark" src="/assets/brand/legato-icon.png" alt="" draggable="false">
       <span class="brand">LEGATO</span>
     </div>
-    <span class="landing-tagline">Composition workspace</span>
+    <span class="landing-tagline"><a class="landing-github-link" href="https://github.com/Feegoat06/OpenAI_Build_Week_Project" target="_blank" rel="noopener noreferrer" aria-label="Open the LEGATO GitHub repository">${ icon('github') }</a><span>Created with ♥ and ♫ from Fee, Louie, and Eric</span></span>
   </header>
-
-  <section class="landing-hero">
-    <p class="kicker">Progression coach</p>
-    <h1>Build the space<br><em>between chords.</em></h1>
-    <p class="landing-lede">Pick up a demo, open a recent project, or start something new. Everything is saved to this browser and can be exported at any time.</p>
-  </section>
 
   <div class="landing-scroll">
     <div id="landing-notice" class="landing-notice" hidden></div>
 
     <section class="landing-section" aria-labelledby="landing-recent-title">
       <div class="landing-section-head">
-        <h2 id="landing-recent-title">Recent projects</h2>
+        <h2 id="landing-recent-title" class="section-heading">Recent projects</h2>
         <span id="landing-recent-count" class="landing-count"></span>
         <div class="landing-section-utilities">
           <button id="landing-import" class="landing-secondary" type="button">Import…</button>
@@ -44,7 +38,7 @@ const TEMPLATE = `
           <input id="landing-import-file" type="file" accept="application/json,.json" hidden />
         </div>
         <div class="landing-section-actions">
-          <button id="landing-new" class="landing-primary" type="button">+ New Project</button>
+          <button id="landing-new" class="primary-action" type="button">${ icon('plus') }<span>New Project</span></button>
         </div>
       </div>
       <div id="landing-recent-grid" class="landing-grid landing-grid-rail"></div>
@@ -52,7 +46,7 @@ const TEMPLATE = `
 
     <section class="landing-section" aria-labelledby="landing-demos-title">
       <div class="landing-section-head">
-        <h2 id="landing-demos-title">Demos</h2>
+        <h2 id="landing-demos-title" class="section-heading">Demos</h2>
         <span class="landing-count">curated by the LEGATO team</span>
       </div>
       <div id="landing-demos-grid" class="landing-grid landing-grid-rail"></div>
@@ -60,14 +54,16 @@ const TEMPLATE = `
 
     <section class="landing-section landing-trash" aria-labelledby="landing-trash-title">
       <div class="landing-trash-header">
-        <button id="landing-trash-toggle" class="landing-section-head landing-trash-toggle" type="button" aria-expanded="false" aria-controls="landing-trash-grid">
-          <h2 id="landing-trash-title">Trash</h2>
+        <button id="landing-trash-toggle" class="landing-section-head landing-trash-toggle" type="button" aria-expanded="false" aria-controls="landing-trash-region">
+          <h2 id="landing-trash-title" class="section-heading">Trash Bin</h2>
           <span id="landing-trash-count" class="landing-count">Empty</span>
-          <span class="landing-trash-caret" aria-hidden="true">▾</span>
+          <span class="landing-trash-caret">${ icon('chevronDown') }</span>
         </button>
-        <button id="landing-trash-empty" class="landing-trash-empty" type="button" hidden>Empty trash</button>
+        <button id="landing-trash-empty" class="landing-trash-empty" type="button" hidden>${ icon('trash') }<span>Empty Trash</span></button>
       </div>
-      <div id="landing-trash-grid" class="landing-grid landing-trash-grid" hidden></div>
+      <div id="landing-trash-region" class="landing-trash-region" aria-hidden="true">
+        <div id="landing-trash-grid" class="landing-grid landing-trash-grid"></div>
+      </div>
     </section>
 
     <footer class="landing-footer">
@@ -91,6 +87,7 @@ export function mountLandingPanel({ container, callbacks }) {
   const demosGrid = shell.querySelector('#landing-demos-grid');
   const trashToggle = shell.querySelector('#landing-trash-toggle');
   const trashEmptyBtn = shell.querySelector('#landing-trash-empty');
+  const trashRegion = shell.querySelector('#landing-trash-region');
   const trashGrid = shell.querySelector('#landing-trash-grid');
   const trashCount = shell.querySelector('#landing-trash-count');
 
@@ -109,7 +106,8 @@ export function mountLandingPanel({ container, callbacks }) {
   trashToggle.onclick = () => {
     trashOpen = !trashOpen;
     trashToggle.setAttribute('aria-expanded', String(trashOpen));
-    trashGrid.hidden = !trashOpen;
+    trashRegion.classList.toggle('is-open', trashOpen);
+    trashRegion.setAttribute('aria-hidden', String(!trashOpen));
   };
   trashEmptyBtn.onclick = () => callbacks.onEmptyTrash();
 
@@ -152,16 +150,27 @@ function emptyMessage(kind) {
   return 'No demos.';
 }
 
-// Simple 1.5-stroke line icons matching the editor's icon-button style.
-const ICONS = {
-  rename: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10.5-10.5-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
-  duplicate: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/></svg>',
-  export: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>',
-  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13"/><path d="M10 11v7M14 11v7"/></svg>',
-};
+/**
+ * Push each project's own theme onto its card so the accent stripe (border-
+ * left) and title font reflect that project — not whatever theme was last
+ * applied to the document root. `--card-accent` overrides `--accent` inside
+ * the card scope; `data-chord-font` re-resolves `--font-chord` locally.
+ */
+function applyCardTheme(card, project) {
+  const theme = project.progression?.settings?.theme;
+  if (theme?.accent) card.style.setProperty('--card-accent', theme.accent);
+  const chordFont = theme?.chordFont?.toLowerCase() === 'classical' ? 'classical' : 'jazztext';
+  card.dataset.chordFont = chordFont;
+  card.classList.toggle('is-classical-project', chordFont === 'classical');
+}
 
-function iconButton({ icon, label, action, dangerous = false }) {
-  return `<button type="button" class="landing-card-icon${ dangerous ? ' danger' : '' }" data-action="${ action }" title="${ label }" aria-label="${ label }">${ ICONS[icon] }</button>`;
+function iconButton({ icon: iconName, label, action, dangerous = false }) {
+  // Uses the shared .icon-button primitive from css/base.css so every icon
+  // button in the app (landing, editor, dialog) picks up hover/focus tweaks
+  // in one place.
+  const classes = ['icon-button', 'is-bordered'];
+  if (dangerous) classes.push('is-danger');
+  return `<button type="button" class="${ classes.join(' ') }" data-action="${ action }" title="${ label }" aria-label="${ label }">${ icon(iconName) }</button>`;
 }
 
 function renderCard(project, kind, callbacks) {
@@ -179,6 +188,7 @@ function renderCard(project, kind, callbacks) {
     card.className = `landing-card landing-card-demo`;
     card.dataset.projectId = project.id;
     card.type = 'button';
+    applyCardTheme(card, project);
     card.innerHTML = `
       <span class="landing-card-badge">Demo · click to open a copy</span>
       <span class="landing-card-name">${ escapeHtml(project.name) }</span>
@@ -191,6 +201,7 @@ function renderCard(project, kind, callbacks) {
   const card = document.createElement('article');
   card.className = `landing-card landing-card-${ kind }`;
   card.dataset.projectId = project.id;
+  applyCardTheme(card, project);
 
   const iconRow = kind === 'recent'
     ? [

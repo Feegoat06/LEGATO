@@ -1,24 +1,125 @@
 /* Design tokens, resets, and shared visual primitives used by every panel.
    Panel files (editor-pane.css, sheet-music-pane.css, ...) depend on this
    file's variables and shared classes. Panel-specific rules should belong
-   in the panel file. */
+   in the panel file.
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+   Type system (two tiers, per the design revamp):
+     --font-body   Space Grotesk. Every UI label, section heading, body copy,
+                   kicker, and metadata value.
+     --font-chord  Playful/display, RESERVED for chord symbols and project
+                   titles. Switches per project via [data-chord-font] on
+                   <html> — jazztext (default) uses MuseJazz Text, classical
+                   uses Edwin italic. Both are self-hosted from /fonts (SIL
+                   OFL, sourced from the MuseScore repo).
+
+   Accent color is per-project. --accent is set at runtime by editor-view
+   when a project mounts, cleared on unmount. The two derived aliases give
+   panels ready-made translucent tints without recomputing color-mix. */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@font-face {
+    font-family: 'MuseJazz Text';
+    src: url('/fonts/MuseJazzText.otf') format('opentype');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap
+}
+
+@font-face {
+    font-family: 'Edwin';
+    src: url('/fonts/Edwin-Roman.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap
+}
+
+@font-face {
+    font-family: 'Edwin';
+    src: url('/fonts/Edwin-Bold.otf') format('opentype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap
+}
+
+@font-face {
+    font-family: 'Edwin';
+    src: url('/fonts/Edwin-Italic.otf') format('opentype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap
+}
+
+@font-face {
+    font-family: 'Edwin';
+    src: url('/fonts/Edwin-BdIta.otf') format('opentype');
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap
+}
 
 :root {
-    --ink: #050403;
-    --panel: #0d0a08;
-    --panel-2: #17120e;
-    --panel-3: #211811;
-    --hairline: rgba(196, 167, 126, .16);
-    --ivory: #e6ceaa;
-    --tan: #c4a77e;
-    --tan-dim: #7a664b;
-    --anchor: #d1a15a;
-    --danger: #c87b67;
-    --font-display: 'Fraunces', serif;
-    --font-body: 'Inter', sans-serif;
-    --font-mono: 'IBM Plex Mono', monospace
+    /* Surfaces, darkest → lightest. */
+    --ink: #141210;
+    --panel: #16130F;
+    --panel-2: #1E1912;
+    --panel-3: #231E14;
+    --panel-4: #271F16;
+
+    /* Text on dark surfaces. --tan sits between ivory (primary) and tan-dim
+       (secondary/labels); used mainly for filled-pill tag copy. */
+    --ivory: #F5EEDF;
+    --tan: #E9D9BE;
+    --tan-dim: #A6987F;
+    --hairline: rgba(240, 225, 195, .08);
+
+    --danger: #d97a70;
+
+    /* Per-project accent (set by editor-view at mount). Defaults to Amber so
+       the landing page and any panel outside a project still has a color. */
+    --accent: #E8A94B;
+    --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+    --accent-border: color-mix(in srgb, var(--accent) 33%, transparent);
+    --accent-tint: color-mix(in srgb, var(--accent) 55%, transparent);
+
+    /* Fonts. --font-chord flips on the data-chord-font attribute below. */
+    --font-body: 'Space Grotesk', sans-serif;
+    --font-chord-jazz: 'MuseJazz Text', 'Comic Sans MS', cursive;
+    --font-chord-classical: 'Edwin', Georgia, 'Times New Roman', serif;
+    --font-chord: var(--font-chord-jazz);
+    --font-chord-style: normal;
+    --font-chord-weight: 700;
+
+    /* Small-text scale for tan-dim helper text. Space Grotesk reads smaller
+       than the previous mono at the same rem, so these tokens centralize
+       every small grey label/eyebrow/helper size — bump here to shift the
+       whole system at once instead of editing each panel file.
+         --fs-label    tiny uppercase form labels & micro captions
+         --fs-eyebrow  standard kickers, section eyebrows, pill labels
+         --fs-copy     sentence-case helper body copy, ledes, footers
+       Circle-of-fifths wedge labels get their own tokens so they can be
+       tuned independently of the rest of the small-text scale. */
+    --fs-label: .74rem;
+    --fs-eyebrow: .78rem;
+    --fs-copy: .88rem;
+    --fs-wedge-major: .98rem;
+    --fs-wedge-minor: .82rem;
+
+    /* Corner radii. Pills stay 999px; card/chord/cell are the three used
+       across all panels for surface-tiered rounding. */
+    --radius-card: 12px;
+    --radius-chord: 10px;
+    --radius-cell: 8px;
+    --radius-pill: 999px
+}
+
+/* Chord-font toggle. Set by editor-view via document.documentElement.dataset
+   .chordFont. Also affects style/weight because Edwin's shipped weight is
+   italic-only. */
+:root[data-chord-font="classical"] {
+    --font-chord: var(--font-chord-classical);
+    --font-chord-style: normal;
+    --font-chord-weight: 700
 }
 
 * {
@@ -48,20 +149,146 @@ body {
 /* Shared "eyebrow" label used above section headings in every panel. */
 .kicker {
     margin: 0;
-    color: var(--anchor);
-    font: 500 .62rem var(--font-mono);
+    color: var(--accent);
+    font: 500 var(--fs-eyebrow) var(--font-body);
     text-transform: uppercase;
-    letter-spacing: .18em
+    letter-spacing: .2em
 }
 
-/* Icon-style buttons shared by editor rows (delete) and dialog headers (close). */
+/* Primary heading for major content sections in the project hub and
+   workspace panels. Keep title case in the markup so every surface shares
+   the same visual treatment without forcing uppercase labels. */
+.section-heading {
+    margin: 0;
+    color: var(--ivory);
+    font: 700 clamp(1.75rem, 3vw, 2.4rem)/1 var(--font-body);
+    letter-spacing: -.02em
+}
+
+/* Shared filled action used wherever creating a project or chord is the
+   primary next step. Keeping the icon and button treatment together makes
+   those actions visually identical across surfaces. */
+.primary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 22px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--ink);
+    font: 600 .82rem var(--font-body);
+    letter-spacing: 0;
+    cursor: pointer;
+    transition: filter .15s ease
+}
+
+.primary-action:hover {
+    filter: brightness(1.08)
+}
+
+.primary-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
+}
+
+.primary-action svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round
+}
+
+/* Base treatment for every icon emitted by js/ui/icons.js. Individual
+   controls set size locally; all icons otherwise inherit their container's
+   colour and use one consistent rounded line style. */
+.ui-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
+/* Icon-style buttons — shared primitive.
+   Three variants layered on the base:
+     .icon-button                 minimal borderless glyph (delete row, close dialog)
+     .icon-button.is-bordered     hairline-outlined pill icon (landing card actions)
+     .icon-button.is-danger       tints hover state red instead of accent
+   Landing-card and delete/close specialize by chaining more class names or
+   setting size overrides; the shared rules (color chain, hover, focus,
+   pointer) live here so future tweaks are one edit.
+
+   Legacy aliases .delete-button and .close-button still work for existing
+   markup that hasn't been re-tagged. */
+.icon-button,
 .delete-button,
 .close-button {
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
     border: 0;
-    background: none;
+    background: transparent;
     color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .12s ease, border-color .12s ease, background .12s ease
+}
+
+.icon-button:hover,
+.delete-button:hover,
+.close-button:hover {
+    color: var(--accent)
+}
+
+.icon-button:focus-visible,
+.delete-button:focus-visible,
+.close-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px
+}
+
+.icon-button.is-bordered {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill)
+}
+
+.icon-button.is-bordered:hover {
+    border-color: var(--accent-border);
+    background: var(--accent-soft)
+}
+
+.icon-button.is-danger:hover {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+    background: color-mix(in srgb, var(--danger) 8%, transparent)
+}
+
+.icon-button svg,
+.landing-card-icon svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
+/* Glyph (text) icons like the "×" close/delete keep a slightly larger
+   font-size and no border so they read as text-buttons. */
+.delete-button,
+.close-button {
     font-size: 1.3rem;
-    cursor: pointer
+    line-height: 1
 }
 
 .delete-button:hover,
@@ -69,26 +296,203 @@ body {
     color: var(--danger)
 }
 
-/* Shared form select styling used by settings-grid, modal-controls, chord-bars, and transition editors. */
+/* Shared form select styling. `.form-select` is the reusable primitive;
+   the container selectors below force `width: 100%` for the grid contexts
+   they own (settings-grid rows, modal-controls, transition editors). The
+   chord-row beats select opts out (own layered treatment in editor-pane.css). */
+.form-select,
 .settings-grid select,
 .modal-controls select,
-.chord-bars,
 .transition-select {
-    width: 100%;
     border: 1px solid var(--hairline);
-    border-radius: 0;
-    background: var(--panel-2);
+    border-radius: var(--radius-cell);
+    background: var(--panel-3);
     color: var(--ivory);
-    font: 400 .69rem var(--font-mono);
-    padding: 10px;
-    outline: none
+    font: 500 .85rem var(--font-body);
+    padding: 9px 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .12s ease
 }
 
+.form-select:focus,
 .settings-grid select:focus,
 .modal-controls select:focus,
-.chord-bars:focus,
 .transition-select:focus {
-    border-color: var(--anchor)
+    border-color: var(--accent)
+}
+
+.settings-grid select,
+.modal-controls select,
+.transition-select {
+    width: 100%
+}
+
+/* Tempo widget — shared between the sheet-music toolbar and the project-
+   settings modal. Groups a range slider with a compact numeric override and
+   a "BPM" caption. Callers wire slider ↔ number sync in JS. The outer label
+   sets its own layout (inline-flex row in the toolbar, grid cell in the
+   modal); this class only owns the internal group. */
+.tempo-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0
+}
+
+.tempo-control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 200px;
+    min-width: 140px;
+    height: 8px;
+    margin: 0;
+    padding: 0;
+    background: color-mix(in srgb, var(--tan-dim) 22%, transparent);
+    border-radius: var(--radius-pill);
+    outline: none;
+    cursor: pointer
+}
+
+.tempo-control input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    background: transparent;
+    border-radius: var(--radius-pill)
+}
+
+.tempo-control input[type="range"]::-moz-range-track {
+    height: 8px;
+    background: color-mix(in srgb, var(--tan-dim) 22%, transparent);
+    border-radius: var(--radius-pill)
+}
+
+.tempo-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 70%, transparent), 0 2px 8px rgba(0, 0, 0, .35);
+    cursor: pointer;
+    transition: transform .15s ease
+}
+
+.tempo-control input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 70%, transparent), 0 2px 8px rgba(0, 0, 0, .35);
+    cursor: pointer;
+    transition: transform .15s ease
+}
+
+.tempo-control input[type="range"]:hover::-webkit-slider-thumb,
+.tempo-control input[type="range"]:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12)
+}
+
+.tempo-control input[type="range"]:hover::-moz-range-thumb,
+.tempo-control input[type="range"]:focus-visible::-moz-range-thumb {
+    transform: scale(1.12)
+}
+
+.tempo-control input[type="number"] {
+    flex: 0 0 auto;
+    width: 72px;
+    padding: 8px 10px;
+    background: var(--panel-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-cell);
+    color: var(--ivory);
+    font: 600 .88rem var(--font-body);
+    text-align: center;
+    outline: none;
+    transition: border-color .12s ease
+}
+
+.tempo-control input[type="number"]:focus {
+    border-color: var(--accent)
+}
+
+.tempo-control small {
+    color: var(--tan-dim);
+    font: 500 var(--fs-label) var(--font-body);
+    letter-spacing: .1em;
+    text-transform: uppercase
+}
+
+/* Chord symbol — the playful spot. Used by every place that renders a chord
+   name (editor rows, sheet-music header, empty-state quick chips, piano
+   modal header). Font/weight/style all switch via the data-chord-font root
+   attribute above. Normal extensions sit in a nested <sup>; diminished,
+   half-diminished, and augmented quality markers get their own lead-sheet
+   superscript treatment, including a compact following 7 when applicable. */
+.chord-glyph {
+    font-family: var(--font-chord);
+    font-weight: var(--font-chord-weight);
+    font-style: var(--font-chord-style);
+    line-height: .95;
+    letter-spacing: 0
+}
+
+.chord-glyph sup {
+    font-size: .5em;
+    vertical-align: baseline;
+    position: relative;
+    top: -.55em;
+    margin-left: .04em;
+    font-weight: inherit;
+    font-style: inherit;
+    line-height: 1
+}
+
+/* Keep the O / Ø / + quality marker and an optional following 7 visibly
+   raised. The shared <sup> treatment provides the lead-sheet scale and
+   vertical offset; these rules only adjust the internal spacing. */
+.chord-glyph sup.chord-quality-marker {
+    margin-left: .02em;
+    margin-right: -.02em
+}
+
+.chord-glyph sup.chord-quality-suffix {
+    margin-left: -.02em;
+}
+
+/* Segmented pill toggle — Classical / JazzText. Used by the project-settings
+   modal. Active option inverts on the accent; inactive stays muted. */
+.chord-font-toggle {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--panel-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    width: fit-content
+}
+
+.chord-font-option {
+    padding: 7px 16px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--tan-dim);
+    font: 600 .79rem var(--font-body);
+    letter-spacing: .04em;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease
+}
+
+.chord-font-option:hover:not(.is-active) {
+    color: var(--ivory)
+}
+
+.chord-font-option.is-active {
+    background: var(--accent);
+    color: var(--ink)
 }
 
 @keyframes spin {

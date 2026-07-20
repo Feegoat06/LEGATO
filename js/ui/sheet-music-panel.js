@@ -1,7 +1,7 @@
 /**
- * Right-side sheet music surface: header (title), VexFlow SVG with a compact
- * corner zoom control, and the transport row (play/stop plus session-only
- * tempo/clef overrides).
+ * Right-side sheet music surface: VexFlow SVG with a compact corner zoom
+ * control, and the transport row (play/stop plus session-only tempo/clef
+ * overrides).
  *
  * Tempo and clef controls here are session-only overrides: they never mutate
  * the project's persistent settings. When the persistent tempo/clef change
@@ -15,29 +15,18 @@ import { renderNotation } from '../sheet-music/render.js';
 import { createSheetMusicParticles } from '../sheet-music/particles.js';
 import { mountTenutino } from './tenutino.js';
 import { TEMPO_MIN, TEMPO_MAX } from '../state.js';
+import { icon } from './icons.js';
 
 const ZOOM_MIN = 0.7;
 const ZOOM_MAX = 1.5;
 const ZOOM_STEP = 0.1;
-// Continuous wheel zoom. One wheel notch (~100 units of deltaY on most mice
-// under DOM_DELTA_PIXEL) moves the zoom ~2%, so five notches = one 10% step.
-const WHEEL_ZOOM_FACTOR = 0.0005;
-const WHEEL_DELTA_LINE_PX = 16;
-const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
-<header class="sheet-music-header">
-  <div class="sheet-music-title">
-    <p class="kicker">Compiled sheet music</p>
-    <h2>Your Progression!</h2>
-  </div>
-</header>
-
 <section class="notation-stage" aria-label="Progression notation">
   <div class="sheet-music-zoom-control" role="group" aria-label="Zoom">
-    <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">−</button>
+    <button id="sheet-music-zoom-out" type="button" aria-label="Zoom out">${ icon('minus') }</button>
     <output id="sheet-music-zoom-value" aria-live="polite">100%</output>
-    <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="sheet-music-zoom-in" type="button" aria-label="Zoom in">${ icon('plus') }</button>
   </div>
   <div class="staff-glow" aria-hidden="true"></div>
   <div id="sheet-music-layer" class="sheet-music-layer">
@@ -50,17 +39,17 @@ const TEMPLATE = `
 <div class="transport-row">
   <div id="transport-mount"></div>
   <div class="sheet-music-controls">
-    <label class="tempo-control">
+    <label>
       <span>Tempo</span>
-      <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
-      <span class="tempo-value">
+      <div class="tempo-control">
+        <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
         <input id="sheet-music-tempo-input" type="number" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" inputmode="numeric" />
         <small>BPM</small>
-      </span>
+      </div>
     </label>
-    <label class="clef-control">
+    <label>
       <span>Clef</span>
-      <select id="sheet-music-clef">
+      <select id="sheet-music-clef" class="form-select">
         <option value="auto">Auto</option>
         <option value="treble">Treble</option>
         <option value="bass">Bass</option>
@@ -80,7 +69,6 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   const zoomOutBtn = container.querySelector('#sheet-music-zoom-out');
   const zoomInBtn = container.querySelector('#sheet-music-zoom-in');
   const layerEl = container.querySelector('#sheet-music-layer');
-  const notationStageEl = container.querySelector('.notation-stage');
   const particlesCanvas = container.querySelector('#sheet-music-particles');
   const particles = createSheetMusicParticles(particlesCanvas);
   const tenutino = mountTenutino({
@@ -136,41 +124,36 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   }
 
   function clampZoom(value) {
-    // Fine 0.1% precision so trackpad microdeltas accumulate visibly. The
-    // displayed readout still rounds to integer percent, and the +/- buttons
-    // move by 0.1, so both interactions read as clean 10% marks.
-    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 1000) / 1000));
+    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
   }
 
   function setZoom(nextZoom) {
     zoom = clampZoom(nextZoom);
-    layerEl.style.width = `${ 100 / zoom }%`;
+    // Keep the visible sheet the width of its stage at every zoom level. This
+    // gives a zoomed-out sheet additional layout room for more measures per
+    // system, while a crowded measure at higher zoom moves its neighbour to
+    // the next line instead of compressing either bar's notation.
     layerEl.style.zoom = String(zoom);
     zoomValueEl.textContent = `${ Math.round(zoom * 100) }%`;
     tenutino.setZoom(zoom);
     zoomOutBtn.disabled = zoom <= ZOOM_MIN + 1e-6;
     zoomInBtn.disabled = zoom >= ZOOM_MAX - 1e-6;
+    // CSS `zoom` already changes this element's layout coordinate space. Keep
+    // the layer at 100% so the rendered SVG reaches the visual panel width at
+    // every button zoom level; applying an inverse percentage here would make
+    // a zoomed-in score leave a black gap on the right.
+    layerEl.style.width = '100%';
     scheduleRerender();
   }
 
   zoomOutBtn.onclick = () => setZoom(zoom - ZOOM_STEP);
   zoomInBtn.onclick = () => setZoom(zoom + ZOOM_STEP);
 
-  // Wheel-to-zoom. Every event moves the zoom immediately (responsive),
-  // but by a small fraction of the deltaY so a single mouse-wheel notch
-  // is a 2% nudge rather than the old 10% jump. Trackpad users get finer
-  // deltas and correspondingly smoother motion.
-  function normalizeWheelDelta(event) {
-    if (event.deltaMode === 1) return event.deltaY * WHEEL_DELTA_LINE_PX;
-    if (event.deltaMode === 2) return event.deltaY * WHEEL_DELTA_PAGE_PX;
-    return event.deltaY;
-  }
-  notationStageEl.addEventListener('wheel', (event) => {
-    if (event.deltaY === 0) return;
-    event.preventDefault();
-    setZoom(zoom - normalizeWheelDelta(event) * WHEEL_ZOOM_FACTOR);
-  }, { passive: false });
   window.addEventListener('resize', scheduleRerender);
+  const panelResizeObserver = typeof ResizeObserver === 'undefined'
+    ? null
+    : new ResizeObserver(scheduleRerender);
+  panelResizeObserver?.observe(container);
 
   setZoom(zoom);
 
@@ -235,6 +218,11 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     /** Effective (override-aware) settings used for playback and rendering. */
     getEffectiveSettings() {
       return effectiveSettings ?? baseSettings;
+    },
+    unmount() {
+      window.removeEventListener('resize', scheduleRerender);
+      panelResizeObserver?.disconnect();
+      cancelAnimationFrame(resizeFrame);
     },
   };
 }
