@@ -18,8 +18,16 @@ import { createProjectStore } from './persistence.js';
 import { createRouter, makeEditorResumePolicy, parseEditorHash, LANDING_HASH } from './router.js';
 import { createLandingView } from './views/landing-view.js';
 import { createEditorView } from './views/editor-view.js';
+import {
+  beginStartupHandoff,
+  completeStartupHandoff,
+  mountStartupSplash,
+  shouldShowStartupSplash,
+  waitForStartupHandoffTarget,
+} from './ui/startup-splash.js';
 
 const appRoot = document.querySelector('#app-root');
+const startupSplash = appRoot.querySelector('.startup-splash');
 const pianoDialog = mountPianoModal({
   container: document.querySelector('#piano-modal-mount'),
 });
@@ -45,4 +53,17 @@ const router = createRouter({
   resume: makeEditorResumePolicy(store),
 });
 
-router.start();
+if (startupSplash && shouldShowStartupSplash()) {
+  // Keep the splash outside the router root so the destination view can mount
+  // invisibly behind its black handoff stage.
+  document.body.append(startupSplash);
+  const splashController = mountStartupSplash(startupSplash);
+  const startupTenutino = await beginStartupHandoff(startupSplash);
+  splashController.destroy();
+  await router.start();
+  const destination = await waitForStartupHandoffTarget(appRoot);
+  await completeStartupHandoff(startupSplash, startupTenutino, destination);
+} else {
+  startupSplash?.remove();
+  await router.start();
+}

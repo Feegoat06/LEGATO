@@ -3,6 +3,7 @@
    queries so parallel edits don't overlap on the same file. */
 
 @import url('./base.css');
+@import url('./startup-splash.css');
 @import url('./layout.css');
 @import url('./landing.css');
 @import url('./editor-pane.css');

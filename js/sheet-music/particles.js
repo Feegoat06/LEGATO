@@ -254,10 +254,10 @@ export function createSheetMusicParticles(canvas) {
   const T = window.THREE;
   if (!T) {
     console.warn('[particles] Three.js not available — visual disabled.');
-    return { setSheetMusic() {}, beginPlayback() {}, setProgress() {}, settle() {} };
+    return { setSheetMusic() {}, beginPlayback() {}, setProgress() {}, settle() {}, destroy() {} };
   }
 
-  const stage   = canvas.closest('.notation-stage');
+  const stage   = canvas.closest('[data-particle-stage], .notation-stage');
   const stateEl = stage?.querySelector('#sheet-music-fx-state');
   const mq      = window.matchMedia('(prefers-reduced-motion: reduce)');
   let   rm      = mq.matches;
@@ -370,6 +370,7 @@ export function createSheetMusicParticles(canvas) {
   let sampleGen     = 0;
   let frameId       = 0;
   let lastT         = performance.now();
+  let destroyed     = false;
 
   /* ── Audio analysis via Tone.Analyser ──────────────────────────── */
   let toneAnalyser = null;
@@ -558,6 +559,7 @@ export function createSheetMusicParticles(canvas) {
 
   /* ── Render loop ───────────────────────────────────────────────── */
   function loop(now) {
+    if (destroyed) return;
     frameId = requestAnimationFrame(loop);
 
     const dt = Math.min((now - lastT) / 1000, 0.05);
@@ -594,7 +596,7 @@ export function createSheetMusicParticles(canvas) {
     renderer.render(scene, camera);
   }
 
-  function ensureLoop() { if (!frameId) frameId = requestAnimationFrame(loop); }
+  function ensureLoop() { if (!destroyed && !frameId) frameId = requestAnimationFrame(loop); }
   function setLabel(v)  { if (stateEl) stateEl.textContent = v; }
 
   /* ── Public API (identical surface to old Canvas 2D version) ───── */
@@ -661,7 +663,7 @@ export function createSheetMusicParticles(canvas) {
     ensureLoop();
   }
 
-  mq.addEventListener?.('change', (e) => {
+  function handleMotionPreferenceChange(e) {
     rm = e.matches;
     uMotionStrength.value = rm ? 0 : 1;
     uPointerActive.value = rm ? 0 : uPointerActive.value;
@@ -671,9 +673,9 @@ export function createSheetMusicParticles(canvas) {
       stage?.classList.remove('is-particle-settling');
       setLabel('Sheet music breathing');
     }
-  });
+  }
 
-  stage?.addEventListener('pointermove', (event) => {
+  function handlePointerMove(event) {
     if (rm) return;
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -682,11 +684,39 @@ export function createSheetMusicParticles(canvas) {
       cH - (event.clientY - rect.top) * cH / rect.height,
     );
     uPointerActive.value = 1;
-  }, { passive: true });
-  stage?.addEventListener('pointerleave', () => { uPointerActive.value = 0; }, { passive: true });
+  }
+
+  function handlePointerLeave() {
+    uPointerActive.value = 0;
+  }
+
+  mq.addEventListener?.('change', handleMotionPreferenceChange);
+  stage?.addEventListener('pointermove', handlePointerMove, { passive: true });
+  stage?.addEventListener('pointerleave', handlePointerLeave, { passive: true });
+
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    sampleGen++;
+    if (frameId) cancelAnimationFrame(frameId);
+    frameId = 0;
+    mq.removeEventListener?.('change', handleMotionPreferenceChange);
+    stage?.removeEventListener('pointermove', handlePointerMove);
+    stage?.removeEventListener('pointerleave', handlePointerLeave);
+    stage?.classList.remove('has-full-particles', 'is-particle-playing', 'is-particle-paused', 'is-particle-settling');
+    toneAnalyser?.dispose?.();
+    toneAnalyser = null;
+    if (pts) scene.remove(pts);
+    if (bPts) scene.remove(bPts);
+    geo?.dispose();
+    mat.dispose();
+    bloomMat.dispose();
+    uDotTex.value?.dispose?.();
+    renderer.dispose();
+  }
 
   syncCamera();
   ensureLoop();
 
-  return { setSheetMusic, beginPlayback, setProgress, settle };
+  return { setSheetMusic, beginPlayback, setProgress, settle, destroy };
 }

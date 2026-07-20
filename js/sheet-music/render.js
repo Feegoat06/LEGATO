@@ -14,9 +14,14 @@
  */
 import { vexKeyForNote, chordSpellingIdentity } from '../engine/chords.js';
 import { accidentalFor } from '../engine/key-signature.js';
+import { createParkourObstacle } from './parkour.js';
 
 const KEY_SIGNATURES = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
 const DURATIONS = new Map([[4, 'w'], [3, 'hd'], [2, 'h'], [1, 'q'], [0.5, '8'], [0.25, '16']]);
+// The first system needs real space above it for Tenutino's jump. Previously
+// its resting position was clamped to y=4, so subtracting the parkour lift was
+// immediately clamped away and only later systems could visibly jump.
+export const NOTATION_TOP_HEADROOM = 50;
 
 /** 'auto' picks bass or treble from the median MIDI note across all segments. */
 function resolvedClef(segments, setting) {
@@ -93,7 +98,7 @@ export function renderNotation(container, segments, settings, chords = []) {
   const rows = Math.ceil(measureCount / columns);
   const rowHeight = 150;
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
-  renderer.resize(width, rows * rowHeight + 20);
+  renderer.resize(width, rows * rowHeight + 20 + NOTATION_TOP_HEADROOM);
   const context = renderer.getContext();
   const clef = resolvedClef(segments, settings.clef);
   const staffColor = '#927a58';
@@ -109,8 +114,16 @@ export function renderNotation(container, segments, settings, chords = []) {
     const column = measure % columns;
     const row = Math.floor(measure / columns);
     const x = 10 + column * staveWidth;
-    const y = 16 + row * rowHeight;
-    layout.push({ index: measure, x, width: staveWidth, staffTop: y + 40, lineGap: 10 });
+    const y = 16 + NOTATION_TOP_HEADROOM + row * rowHeight;
+    const measureLayout = {
+      index: measure,
+      x,
+      width: staveWidth,
+      staffTop: y + 40,
+      lineGap: 10,
+      parkourObstacles: [],
+    };
+    layout.push(measureLayout);
     context.openGroup('measure-group', `measure-${ measure }`, { 'data-measure': String(measure) });
     const stave = new VF.Stave(x, y, staveWidth);
     if (column === 0) {
@@ -151,6 +164,13 @@ export function renderNotation(container, segments, settings, chords = []) {
       voice.addTickables(staveNotes);
       new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
+      measureLayout.parkourObstacles = staveNotes
+        .map((note) => createParkourObstacle(
+          note.getKeyProps?.() ?? [],
+          note.getAbsoluteX?.(),
+          measureLayout.lineGap,
+        ))
+        .filter(Boolean);
     }
     context.closeGroup();
   }

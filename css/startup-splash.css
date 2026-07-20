@@ -1,0 +1,207 @@
+/* Startup overture. The markup lives in index.html so it can paint while the
+   external notation and audio libraries are still loading. */
+
+.startup-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    min-width: 320px;
+    min-height: 100vh;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 48%, rgba(76, 56, 34, .1), transparent 32%),
+        var(--panel);
+    color: var(--ivory);
+    opacity: 1;
+    transition: opacity 220ms ease
+}
+
+html[data-legato-navigation="reload"] .startup-splash {
+    display: none
+}
+
+.startup-splash.is-revealing {
+    opacity: 0;
+    pointer-events: none
+}
+
+.startup-splash-header,
+.startup-splash-message,
+.startup-splash-status,
+.startup-splash-score-stage {
+    transition: opacity 220ms ease
+}
+
+.startup-splash.is-handoff .startup-splash-header,
+.startup-splash.is-handoff .startup-splash-message,
+.startup-splash.is-handoff .startup-splash-status,
+.startup-splash.is-handoff .startup-splash-score-stage {
+    opacity: 0
+}
+
+.startup-splash-header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    min-height: 70px;
+    padding: 16px 34px;
+    border-bottom: 1px solid var(--hairline)
+}
+
+.startup-splash-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--ivory);
+    font: 600 1.05rem var(--font-display);
+    letter-spacing: .18em
+}
+
+.startup-splash-brand img {
+    display: block;
+    width: 32px;
+    height: 32px;
+    object-fit: contain
+}
+
+.startup-splash-workspace {
+    margin-left: auto;
+    color: var(--tan-dim);
+    font: 500 .6rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .18em
+}
+
+.startup-splash-content {
+    position: absolute;
+    inset: 70px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 32px 9vh;
+    text-align: center
+}
+
+.startup-splash-tenutino {
+    display: block;
+    width: 46px;
+    height: auto;
+    margin-bottom: 28px;
+    filter: drop-shadow(0 0 16px rgba(209, 161, 90, .1));
+    animation: startup-tenutino-arrive 500ms cubic-bezier(.2, .7, .2, 1) both
+}
+
+.startup-splash-tenutino.is-travelling {
+    z-index: 2;
+    object-fit: contain;
+    transition:
+        left var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        top var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        width var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1),
+        height var(--startup-tenutino-travel-ms) cubic-bezier(.22, .72, .2, 1)
+}
+
+.startup-splash-message {
+    min-height: 1.2em;
+    margin: 0;
+    color: var(--ivory);
+    font: 340 clamp(1.8rem, 3vw, 2.75rem)/1.18 var(--font-display);
+    letter-spacing: -.025em
+}
+
+.startup-splash-status {
+    margin: 22px 0 0;
+    color: var(--tan-dim);
+    font: 500 .65rem var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .2em
+}
+
+.startup-splash-score-stage {
+    position: relative;
+    display: block;
+    width: min(760px, 72vw);
+    aspect-ratio: 920 / 76;
+    margin-top: 25px;
+    overflow: visible
+}
+
+.startup-splash-score {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    color: var(--anchor)
+}
+
+.startup-splash-particles {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none
+}
+
+.startup-splash-score-stage.has-full-particles .startup-splash-score {
+    opacity: 0
+}
+
+.startup-splash-staff {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1;
+    opacity: .42
+}
+
+.startup-splash-chord,
+.startup-splash-passing-notes {
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.2
+}
+
+.startup-splash-passing-notes {
+    opacity: .82
+}
+
+.startup-splash-chord-end {
+    opacity: .72
+}
+
+@keyframes startup-tenutino-arrive {
+    from { opacity: 0; transform: translateY(-8px) scale(.96) }
+    to { opacity: 1; transform: translateY(0) scale(1) }
+}
+
+@media (max-width: 700px) {
+    .startup-splash-header {
+        padding: 14px 22px
+    }
+
+    .startup-splash-workspace {
+        display: none
+    }
+
+    .startup-splash-content {
+        padding-inline: 22px
+    }
+
+    .startup-splash-score-stage {
+        width: min(620px, 88vw)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .startup-splash,
+    .startup-splash-tenutino,
+    .startup-splash-header,
+    .startup-splash-message,
+    .startup-splash-status,
+    .startup-splash-score-stage {
+        animation: none;
+        transition: none
+    }
+}

@@ -2,12 +2,14 @@
    the companion separate makes it crisp, draggable, and keyboard reachable. */
 
 .tenutino-root {
+    --tenutino-size: 46px;
     --tenutino-travel-ms: 760ms;
     --tenutino-beat-ms: 600ms;
+    --tenutino-parkour-rotation: 0deg;
     position: absolute;
     z-index: 8;
-    width: 32px;
-    height: 32px;
+    width: var(--tenutino-size);
+    height: var(--tenutino-size);
     pointer-events: auto;
     transition:
         left var(--tenutino-travel-ms) cubic-bezier(.22, .75, .2, 1),
@@ -30,12 +32,18 @@
         top 260ms cubic-bezier(.22, .75, .2, 1)
 }
 
+.tenutino-root.is-following-playback.is-parkouring {
+    transition:
+        left 90ms linear,
+        top 70ms linear
+}
+
 .tenutino-character {
     position: relative;
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: var(--tenutino-size);
+    height: var(--tenutino-size);
     padding: 0;
     border: 0;
     border-radius: 9px;
@@ -170,6 +178,15 @@
 
 .tenutino-root.is-auto-scrolling .tenutino-character {
     animation: tenutino-wait .8s ease-in-out infinite alternate
+}
+
+.tenutino-root.is-dancing.is-parkouring .tenutino-character {
+    animation: none;
+    transform: rotate(var(--tenutino-parkour-rotation));
+    transition: transform 70ms linear;
+    filter:
+        drop-shadow(0 5px 5px rgba(0, 0, 0, .58))
+        drop-shadow(0 0 7px rgba(209, 161, 90, .2))
 }
 
 @keyframes tenutino-notification {

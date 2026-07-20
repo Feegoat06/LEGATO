@@ -25,7 +25,12 @@ import { mountEditorPanel } from '../ui/editor-panel.js';
 import { mountSheetMusicPanel } from '../ui/sheet-music-panel.js';
 import { mountTransport } from '../ui/transport.js';
 import { mountTutorChat } from '../ui/tutor-chat.js';
-import { lastMeasureForSource, lastMeasureForSeam } from '../ui/tenutino.js';
+import {
+  lastMeasureForSource,
+  lastMeasureForSeam,
+  loadTenutinoContext,
+  saveTenutinoContext,
+} from '../ui/tenutino.js';
 import { buildCoachEvidence } from '../coach/evidence.js';
 import { requestCoach } from '../coach/coach.js';
 import { navigate, LANDING_HASH } from '../router.js';
@@ -60,6 +65,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let editingId = null;
       let selectedSeam = 0;
       let latestTenutinoContext = null;
+      const initialTenutinoContext = loadTenutinoContext(params.id, progression);
 
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
@@ -331,7 +337,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         explainSeam(tenutinoSeamIndex(), { mode, question });
       }
 
-      function focusTenutino(edit) {
+      function focusTenutino(edit, { encourage = true } = {}) {
         if (!edit) return;
         let measureIndex = 0;
         if (edit.type === 'chord') {
@@ -341,7 +347,8 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           measureIndex = lastMeasureForSeam(segments, edit.index, departingId, 0);
         }
         latestTenutinoContext = { ...edit, measureIndex };
-        sheetMusic.tenutino.focusMeasure(measureIndex, { encourage: true });
+        saveTenutinoContext(params.id, edit);
+        sheetMusic.tenutino.focusMeasure(measureIndex, { encourage });
       }
 
       // ── Transport ───────────────────────────────────────────────────
@@ -441,7 +448,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
-      function rerender(tenutinoEdit = null) {
+      function rerender(tenutinoEdit = null, { encourage = true } = {}) {
         stopPlayback();
         sheetMusic.particles.settle({ immediate: true });
         sheetMusic.tenutino.setPlaying(false);
@@ -454,12 +461,13 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         segments = compile(progression);
         editor.render({ progression, selectedSeam, projectName: currentName });
         sheetMusic.render(segments, progression.settings, progression.chords);
-        focusTenutino(tenutinoEdit);
+        focusTenutino(tenutinoEdit, { encourage });
         tutorChat.setContext(coachContextText());
         scheduleAutosave();
       }
 
-      rerender();
+      rerender(initialTenutinoContext, { encourage: false });
+      shell.dataset.viewReady = 'true';
 
       return {
         async unmount() {
