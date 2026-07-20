@@ -18,7 +18,13 @@ import { compile, makeChord, reconcileSeams, beatsToBars, isTechniqueUsable } fr
 import { chordDisplayName } from '../engine/chords.js';
 import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
-import { playSegments, stopPlayback, pausePlayback, resumePlayback } from '../audio/playback.js';
+import {
+  playSegments,
+  stopPlayback,
+  pausePlayback,
+  resumePlayback,
+  preparePlaybackAudio,
+} from '../audio/playback.js';
 import { openPianoModal, populateChordControls } from '../ui/piano-modal.js';
 import { openProjectSettingsModal } from '../ui/project-settings-modal.js';
 import { mountEditorPanel } from '../ui/editor-panel.js';
@@ -354,6 +360,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       // ── Transport ───────────────────────────────────────────────────
       /** @type {'idle' | 'playing' | 'paused'} */
       let playbackState = 'idle';
+      let playbackRequest = 0;
 
       function setPlaybackState(next) {
         playbackState = next;
@@ -378,19 +385,25 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           tutorChat.setPlaybackActive(true);
           transport.setPulseActive(true);
           transport.setStatus('Playing');
-          sheetMusic.particles.beginPlayback();
+          sheetMusic.particles.beginPlayback({ resume: true });
         } else {
           startPlaybackFromStart();
         }
       }
 
       async function startPlaybackFromStart() {
+        const request = ++playbackRequest;
         transport.setPlayEnabled(false);
         transport.setPulseActive(true);
-        transport.setStatus('Loading piano…');
-        sheetMusic.particles.beginPlayback();
+        transport.setStatus('Preparing playback…');
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
+          await Promise.all([
+            preparePlaybackAudio(),
+            sheetMusic.particles.ready(),
+          ]);
+          if (request !== playbackRequest) return;
+          sheetMusic.particles.beginPlayback();
           setPlaybackState('playing');
           sheetMusic.tenutino.setPlaying(true, playbackSettings.tempo);
           tutorChat.setPlaybackActive(true);
@@ -413,9 +426,13 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
               transport.setPulseActive(false);
               transport.setStatus('Playback complete');
             },
-            (progress, measure) => {
-              sheetMusic.particles.setProgress(progress, measure);
-              sheetMusic.tenutino.setPlaybackProgress(progress, measure);
+            (progress, measure, measureProgress, measureDurationSeconds) => {
+              sheetMusic.particles.setProgress(progress, measure, measureProgress);
+              sheetMusic.tenutino.setPlaybackProgress(
+                measureProgress,
+                measure,
+                measureDurationSeconds,
+              );
             },
           );
         } catch (error) {
@@ -432,6 +449,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       }
 
       function handleStop() {
+        playbackRequest++;
         stopPlayback();
         // Full reset: no progress rail, no lingering "paused" glow — Stop
         // should look identical to the just-loaded state.
@@ -449,6 +467,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
 
       // ── Render pipeline ─────────────────────────────────────────────
       function rerender(tenutinoEdit = null, { encourage = true } = {}) {
+        playbackRequest++;
         stopPlayback();
         sheetMusic.particles.settle({ immediate: true });
         sheetMusic.tenutino.setPlaying(false);
@@ -471,6 +490,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
 
       return {
         async unmount() {
+          playbackRequest++;
           window.removeEventListener('beforeunload', beforeUnload);
           stopPlayback();
           tutorRequestController?.abort();

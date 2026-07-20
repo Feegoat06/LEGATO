@@ -35,6 +35,23 @@ function styleModifiers(stave, color) {
 }
 
 /**
+ * Pair VexFlow's final engraved X positions with the same measure-relative
+ * beat onsets used by the audio scheduler. These anchors let visual effects
+ * follow musical time instead of treating clefs and time signatures as part
+ * of the playable horizontal duration.
+ */
+export function timelineAnchorsForNotes(segments, notes, measureLength) {
+  const duration = Math.max(1, Number(measureLength) || 1);
+  return notes
+    .map((note, index) => ({
+      x: Number(note.getAbsoluteX?.()),
+      progress: Math.max(0, Math.min(1, (Number(segments[index]?.startBeat) || 0) / duration)),
+    }))
+    .filter((anchor) => Number.isFinite(anchor.x))
+    .sort((first, second) => first.x - second.x);
+}
+
+/**
  * Return one VexFlow tie direction for each tied notehead.
  *
  * VexFlow's stem constants also describe tie curvature: UP produces a curve
@@ -107,6 +124,7 @@ export function renderNotation(container, segments, settings, chords = []) {
   const techniqueColor = '#d1a15a';
   const notesBySource = [];
   const layout = [];
+  const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
   const identityBySourceId = new Map();
   chords.forEach((chord) => identityBySourceId.set(chord.id, chordSpellingIdentity(chord)));
 
@@ -121,6 +139,7 @@ export function renderNotation(container, segments, settings, chords = []) {
       width: staveWidth,
       staffTop: y + 40,
       lineGap: 10,
+      timelineAnchors: [],
       parkourObstacles: [],
     };
     layout.push(measureLayout);
@@ -164,6 +183,11 @@ export function renderNotation(container, segments, settings, chords = []) {
       voice.addTickables(staveNotes);
       new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - (column === 0 ? 120 : 32));
       voice.draw(context, stave);
+      measureLayout.timelineAnchors = timelineAnchorsForNotes(
+        measureSegments,
+        staveNotes,
+        measureLength,
+      );
       measureLayout.parkourObstacles = staveNotes
         .map((note) => createParkourObstacle(
           note.getKeyProps?.() ?? [],

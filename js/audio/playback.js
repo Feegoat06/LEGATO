@@ -92,14 +92,37 @@ export function coalesceTiedSegments(segments, measureLength) {
 }
 
 /**
+ * Resolve both whole-piece and within-measure progress from the audio clock.
+ * Keeping this calculation beside Tone.Transport avoids reconstructing local
+ * progress later from a rounded count of rendered measures, which is wrong
+ * whenever the final measure is only partially filled.
+ */
+export function playbackPositionAt(elapsedSeconds, totalSeconds, measureDurationSeconds) {
+  const total = Math.max(0, Number(totalSeconds) || 0);
+  const duration = Math.max(0, Number(measureDurationSeconds) || 0);
+  const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
+  const globalProgress = total ? Math.min(1, elapsed / total) : 1;
+
+  if (globalProgress >= 1 || !duration) {
+    return { globalProgress, measureIndex: null, measureProgress: 1 };
+  }
+
+  const measureCount = Math.max(1, Math.ceil(total / duration));
+  const measureIndex = Math.min(measureCount - 1, Math.floor(elapsed / duration));
+  const measureProgress = Math.max(0, Math.min(1, (elapsed - measureIndex * duration) / duration));
+  return { globalProgress, measureIndex, measureProgress };
+}
+
+/**
  * Schedule an entire compiled progression against Tone.Transport.
  *
  * @param {Segment[]} segments      Output of compile(); notation reads from the same list.
  * @param {Settings}  settings      Progression settings (tempo, timeSig).
  * @param {(measureIndex: number | null) => void} onMeasure  Fires when the active measure changes; called with `null` when playback ends.
  * @param {() => void} [onStop]     Fires once after the final segment stops sounding.
- * @param {(progress: number, measureIndex: number | null) => void} [onProgress]
- *        Frame-level progress driven off Tone.Transport.seconds so pause/resume freezes it.
+ * @param {(progress: number, measureIndex: number | null, measureProgress: number, measureDurationSeconds: number) => void} [onProgress]
+ *        Frame-level global and measure-local progress driven directly off
+ *        Tone.Transport.seconds so pause/resume freezes both values.
  *
  * Cancels any in-flight schedule before starting the new one so overlapping
  * `Play` clicks don't stack.
@@ -107,12 +130,11 @@ export function coalesceTiedSegments(segments, measureLength) {
 export async function playSegments(segments, settings, onMeasure, onStop, onProgress) {
   stopPlayback();
   const generation = playbackGeneration;
-  await Tone.start();
-  const instrument = getSampler();
-  await Tone.loaded();
+  const instrument = await preparePlaybackAudio();
   if (generation !== playbackGeneration) return;
   const secondsPerBeat = 60 / settings.tempo;
   const measureLength = settings.timeSig.num * 4 / settings.timeSig.den;
+  const measureDurationSeconds = measureLength * secondsPerBeat;
   const transport = Tone.Transport;
   transport.stop();
   transport.cancel(0);
@@ -139,27 +161,30 @@ export async function playSegments(segments, settings, onMeasure, onStop, onProg
       lastMeasure = event.measureIndex;
     }
   }
-  const measureCount = Math.max(1, Math.ceil(end / (measureLength * secondsPerBeat)));
   transport.scheduleOnce(() => {
     if (generation !== playbackGeneration) return;
     cancelAnimationFrame(progressFrame);
     progressFrame = 0;
     currentTick = null;
     cancelTransport();
-    onProgress?.(1, null);
+    onProgress?.(1, null, 1, measureDurationSeconds);
     onMeasure(null);
     onStop?.();
   }, end + 0.1);
   const tickProgress = () => {
     if (generation !== playbackGeneration) return;
     const elapsed = Math.max(0, transport.seconds);
-    const normalized = end ? Math.min(1, elapsed / end) : 1;
-    const measure = normalized < 1 ? Math.min(measureCount - 1, Math.floor(elapsed / (measureLength * secondsPerBeat))) : null;
-    onProgress?.(normalized, measure);
-    if (normalized < 1) progressFrame = requestAnimationFrame(tickProgress);
+    const position = playbackPositionAt(elapsed, end, measureDurationSeconds);
+    onProgress?.(
+      position.globalProgress,
+      position.measureIndex,
+      position.measureProgress,
+      measureDurationSeconds,
+    );
+    if (position.globalProgress < 1) progressFrame = requestAnimationFrame(tickProgress);
   };
   currentTick = tickProgress;
-  onProgress?.(0, 0);
+  onProgress?.(0, 0, 0, measureDurationSeconds);
   const leadIn = 0.08;
   transport.start(`+${ leadIn }`, 0);
   progressFrame = requestAnimationFrame(tickProgress);
@@ -208,7 +233,7 @@ export function stopPlayback() {
 }
 
 /** Ensure the audio context is started + samples are loaded before triggering. */
-async function ready() {
+export async function preparePlaybackAudio() {
   await Tone.start();
   const instrument = getSampler();
   await Tone.loaded();
@@ -217,13 +242,13 @@ async function ready() {
 
 /** Fire a single note immediately. Used by the piano modal per-key preview. */
 export async function playNote(midi, seconds = 0.45) {
-  const instrument = await ready();
+  const instrument = await preparePlaybackAudio();
   instrument.triggerAttackRelease(frequency(midi), seconds);
 }
 
 /** Fire a chord (multiple notes) immediately. Used by the preview panel's play button and sheet click. */
 export async function playChord(midis, seconds = 1.2) {
   if (!midis?.length) return;
-  const instrument = await ready();
+  const instrument = await preparePlaybackAudio();
   instrument.triggerAttackRelease(midis.map(frequency), seconds);
 }

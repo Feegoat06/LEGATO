@@ -7,6 +7,7 @@ import {
   resolveTenutinoAnchor,
   resolveTenutinoPlaybackPosition,
   saveTenutinoContext,
+  tenutinoHandoffFraction,
   TENUTINO_SIZE,
 } from '../js/ui/tenutino.js';
 
@@ -50,6 +51,42 @@ test('Tenutino moves continuously from the start to the end of the playing measu
   assert.equal(resolveTenutinoPlaybackPosition(layout, 2, 0).left, 10);
   assert.equal(resolveTenutinoPlaybackPosition(layout, 2, 0.5).left, 147);
   assert.equal(resolveTenutinoPlaybackPosition(layout, 2, 1).left, 284);
+});
+
+test('adjacent measures on the same system share an exact boundary position', () => {
+  const layout = [
+    { index: 0, x: 10, width: 320, staffTop: 106, parkourObstacles: [] },
+    { index: 1, x: 330, width: 320, staffTop: 106, parkourObstacles: [] },
+  ];
+  const outgoing = resolveTenutinoPlaybackPosition(layout, 0, 1);
+  const incoming = resolveTenutinoPlaybackPosition(layout, 1, 0);
+
+  assert.equal(outgoing.handoff.type, 'same-system');
+  assert.equal(outgoing.left, incoming.left);
+  assert.equal(outgoing.top, incoming.top);
+});
+
+test('a wrapped measure lands its jump exactly at the next system entrance', () => {
+  const layout = [
+    { index: 0, x: 330, width: 320, staffTop: 106, parkourObstacles: [] },
+    { index: 1, x: 10, width: 320, staffTop: 256, parkourObstacles: [] },
+  ];
+  const options = { systemWrapHandoffFraction: 0.2 };
+  const midpoint = resolveTenutinoPlaybackPosition(layout, 0, 0.9, TENUTINO_SIZE, options);
+  const outgoing = resolveTenutinoPlaybackPosition(layout, 0, 1, TENUTINO_SIZE, options);
+  const incoming = resolveTenutinoPlaybackPosition(layout, 1, 0, TENUTINO_SIZE, options);
+
+  assert.equal(midpoint.handoff.type, 'system-wrap');
+  assert.equal(midpoint.parkour.mode, 'jump');
+  assert.ok(midpoint.top < (46 + 196) / 2);
+  assert.equal(outgoing.left, incoming.left);
+  assert.equal(outgoing.top, incoming.top);
+});
+
+test('measure-boundary handoff windows stay time-based across tempos', () => {
+  assert.equal(tenutinoHandoffFraction(2, 120), 0.08);
+  assert.equal(tenutinoHandoffFraction(1, 120), 0.12);
+  assert.equal(tenutinoHandoffFraction(0.5, 260), 0.3);
 });
 
 test('Tenutino jumps when playback crosses a tall note cluster', () => {

@@ -15,6 +15,8 @@ const TENUTINO_CONTEXT_PREFIX = 'legato.tenutinoContext.';
 
 const TRAVEL_MIN_MS = 560;
 const TRAVEL_MAX_MS = 1400;
+const SAME_SYSTEM_HANDOFF_MS = 120;
+const SYSTEM_WRAP_HANDOFF_MS = 260;
 const ENCOURAGEMENTS = [
   'Nice — let’s hear that.',
   'I like where this is going.',
@@ -86,12 +88,108 @@ export function resolveTenutinoAnchor(layout, measureIndex, size = TENUTINO_SIZE
   };
 }
 
-export function resolveTenutinoPlaybackPosition(layout, measureIndex, progress, size = TENUTINO_SIZE) {
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(start, end, amount) {
+  return start + (end - start) * amount;
+}
+
+function cubicBezier(start, controlA, controlB, end, amount) {
+  const inverse = 1 - amount;
+  return inverse ** 3 * start
+    + 3 * inverse ** 2 * amount * controlA
+    + 3 * inverse * amount ** 2 * controlB
+    + amount ** 3 * end;
+}
+
+export function tenutinoHandoffFraction(measureDurationSeconds, targetMilliseconds) {
+  const durationMs = Math.max(1, Number(measureDurationSeconds) * 1000 || 0);
+  return clamp(targetMilliseconds / durationMs, 0.08, 0.3);
+}
+
+export function resolveTenutinoPlaybackPosition(
+  layout,
+  measureIndex,
+  progress,
+  size = TENUTINO_SIZE,
+  {
+    sameSystemHandoffFraction = 0.1,
+    systemWrapHandoffFraction = 0.2,
+  } = {},
+) {
   const anchor = resolveTenutinoAnchor(layout, measureIndex, size);
   if (!anchor) return null;
-  const measure = layout.find((entry) => entry.index === anchor.measureIndex) ?? layout.at(-1);
+  const layoutIndex = layout.findIndex((entry) => entry.index === anchor.measureIndex);
+  const measure = layout[layoutIndex] ?? layout.at(-1);
+  const nextMeasure = layout[layoutIndex + 1] ?? null;
   const localProgress = Math.max(0, Math.min(1, Number(progress) || 0));
-  const left = measure.x + Math.max(0, measure.width - size) * localProgress;
+  const ordinaryEnd = measure.x + Math.max(0, measure.width - size);
+  let left = lerp(measure.x, ordinaryEnd, localProgress);
+  let top = anchor.top;
+  let handoff = null;
+
+  if (nextMeasure) {
+    const nextAnchor = resolveTenutinoAnchor(layout, nextMeasure.index, size);
+    const sameSystem = Math.abs(nextMeasure.staffTop - measure.staffTop) < 1;
+    const handoffFraction = clamp(
+      sameSystem ? sameSystemHandoffFraction : systemWrapHandoffFraction,
+      0.02,
+      0.45,
+    );
+    const handoffStart = 1 - handoffFraction;
+
+    if (localProgress >= handoffStart) {
+      const rawPhase = (localProgress - handoffStart) / handoffFraction;
+      const phase = rawPhase >= 1 - 1e-9 ? 1 : clamp(rawPhase, 0, 1);
+      const startLeft = lerp(measure.x, ordinaryEnd, handoffStart);
+      const startTop = anchor.top;
+
+      if (sameSystem) {
+        left = lerp(startLeft, nextAnchor.left, phase);
+        top = lerp(startTop, nextAnchor.top, phase);
+        handoff = { type: 'same-system', phase };
+      } else {
+        const controlLeftA = lerp(startLeft, nextAnchor.left, 0.3);
+        const controlLeftB = lerp(startLeft, nextAnchor.left, 0.7);
+        const apexTop = Math.max(4, Math.min(startTop, nextAnchor.top) - size * 0.78);
+        left = cubicBezier(startLeft, controlLeftA, controlLeftB, nextAnchor.left, phase);
+        top = cubicBezier(startTop, apexTop, apexTop, nextAnchor.top, phase);
+        handoff = { type: 'system-wrap', phase };
+      }
+    }
+  }
+
+  if (handoff?.type === 'system-wrap') {
+    const active = handoff.phase > 0 && handoff.phase < 1;
+    return {
+      ...anchor,
+      left,
+      top,
+      handoff,
+      parkour: {
+        active,
+        lift: 0,
+        rotation: active ? -Math.sin(handoff.phase * Math.PI * 2) * 9 : 0,
+        mode: active ? 'jump' : null,
+        phase: handoff.phase,
+      },
+    };
+  }
+
+  // Once the boundary handoff begins, its continuous route owns the position;
+  // obstacle jumps remain confined to the ordinary portion of the measure.
+  if (handoff) {
+    return {
+      ...anchor,
+      left,
+      top,
+      handoff,
+      parkour: { active: false, lift: 0, rotation: 0, mode: null, phase: 0 },
+    };
+  }
+
   const parkour = resolveParkourMotion(
     measure.parkourObstacles,
     left + size / 2,
@@ -104,7 +202,8 @@ export function resolveTenutinoPlaybackPosition(layout, measureIndex, progress, 
   return {
     ...anchor,
     left,
-    top: anchor.top - parkour.lift,
+    top: top - parkour.lift,
+    handoff,
     parkour,
   };
 }
@@ -150,6 +249,9 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
   let isPlaying = false;
   let playbackMeasure = null;
   let playbackProgress = 0;
+  let playbackMeasureDurationSeconds = 0;
+  let playbackBaseLeft = 0;
+  let playbackBaseTop = 0;
   let encouragementIndex = 0;
   let drag = null;
   let suppressClick = false;
@@ -197,16 +299,32 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
     return duration;
   }
 
-  function placeAtPlaybackProgress(progress, measureIndex) {
+  function placeAtPlaybackProgress(
+    measureProgress,
+    measureIndex,
+    measureDurationSeconds = playbackMeasureDurationSeconds,
+  ) {
     if (!layout.length || measureIndex == null) return;
-    const measureCount = Math.max(...layout.map((entry) => entry.index)) + 1;
-    const localProgress = Math.max(0, Math.min(1, progress * measureCount - measureIndex));
-    const position = resolveTenutinoPlaybackPosition(layout, measureIndex, localProgress);
+    const localProgress = Math.max(0, Math.min(1, Number(measureProgress) || 0));
+    playbackMeasureDurationSeconds = Math.max(
+      0,
+      Number(measureDurationSeconds) || playbackMeasureDurationSeconds,
+    );
+    const position = resolveTenutinoPlaybackPosition(layout, measureIndex, localProgress, TENUTINO_SIZE, {
+      sameSystemHandoffFraction: tenutinoHandoffFraction(
+        playbackMeasureDurationSeconds,
+        SAME_SYSTEM_HANDOFF_MS,
+      ),
+      systemWrapHandoffFraction: tenutinoHandoffFraction(
+        playbackMeasureDurationSeconds,
+        SYSTEM_WRAP_HANDOFF_MS,
+      ),
+    });
     if (!position) return;
 
     const previousMeasure = playbackMeasure;
     playbackMeasure = position.measureIndex;
-    playbackProgress = progress;
+    playbackProgress = localProgress;
     root.dataset.playbackMeasure = String(playbackMeasure);
     root.hidden = false;
 
@@ -219,8 +337,11 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
     );
 
     const next = clampPosition(position.left, position.top);
-    root.style.left = `${ next.left }px`;
-    root.style.top = `${ next.top }px`;
+    // Playback positions already come from Tone.Transport's frame-level
+    // clock. Apply them directly on the compositor instead of starting a new
+    // left/top transition every frame and perpetually chasing stale targets.
+    root.style.setProperty('--tenutino-playback-x', `${ next.left - playbackBaseLeft }px`);
+    root.style.setProperty('--tenutino-playback-y', `${ next.top - playbackBaseTop }px`);
     currentLeft = next.left;
     currentTop = next.top;
 
@@ -406,7 +527,11 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
       if (root.hidden && latestMeasure != null) {
         moveToMeasure(latestMeasure, { force: true });
       } else if (isPlaying && playbackMeasure != null) {
-        placeAtPlaybackProgress(playbackProgress, playbackMeasure);
+        placeAtPlaybackProgress(
+          playbackProgress,
+          playbackMeasure,
+          playbackMeasureDurationSeconds,
+        );
       } else if (!manualOverrideActive() && !drag) {
         // VexFlow may wrap a measure to another system after zooming or a
         // container resize. Re-resolve the same measure against the new
@@ -418,6 +543,24 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
     focusMeasure: moveToMeasure,
     say,
     setPlaying(playing, tempo = 100) {
+      const wasPlaying = isPlaying;
+      if (playing && !wasPlaying) {
+        playbackBaseLeft = currentLeft;
+        playbackBaseTop = currentTop;
+        root.style.setProperty('--tenutino-playback-x', '0px');
+        root.style.setProperty('--tenutino-playback-y', '0px');
+      } else if (!playing && wasPlaying) {
+        // Commit the compositor position before returning to the expressive
+        // edit-mode transition. The forced read prevents the class change
+        // from animating between equivalent visual positions.
+        root.style.left = `${ currentLeft }px`;
+        root.style.top = `${ currentTop }px`;
+        root.style.setProperty('--tenutino-playback-x', '0px');
+        root.style.setProperty('--tenutino-playback-y', '0px');
+        playbackBaseLeft = currentLeft;
+        playbackBaseTop = currentTop;
+        root.getBoundingClientRect();
+      }
       isPlaying = playing;
       character.disabled = playing;
       if (playing) {
@@ -437,10 +580,18 @@ export function mountTenutino({ container, scrollContainer, callbacks = {}, now 
       playbackMeasure = measureIndex;
       root.dataset.playbackMeasure = measureIndex == null ? '' : String(measureIndex);
     },
-    setPlaybackProgress(progress, measureIndex) {
-      playbackProgress = Math.max(0, Math.min(1, Number(progress) || 0));
+    setPlaybackProgress(measureProgress, measureIndex, measureDurationSeconds) {
+      playbackProgress = Math.max(0, Math.min(1, Number(measureProgress) || 0));
+      playbackMeasureDurationSeconds = Math.max(
+        0,
+        Number(measureDurationSeconds) || playbackMeasureDurationSeconds,
+      );
       if (!isPlaying || measureIndex == null) return;
-      placeAtPlaybackProgress(playbackProgress, measureIndex);
+      placeAtPlaybackProgress(
+        playbackProgress,
+        measureIndex,
+        playbackMeasureDurationSeconds,
+      );
     },
     returnToLatestEdit,
     destroy() {

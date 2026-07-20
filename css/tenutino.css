@@ -6,6 +6,8 @@
     --tenutino-travel-ms: 760ms;
     --tenutino-beat-ms: 600ms;
     --tenutino-parkour-rotation: 0deg;
+    --tenutino-playback-x: 0px;
+    --tenutino-playback-y: 0px;
     position: absolute;
     z-index: 8;
     width: var(--tenutino-size);
@@ -14,7 +16,7 @@
     transition:
         left var(--tenutino-travel-ms) cubic-bezier(.22, .75, .2, 1),
         top var(--tenutino-travel-ms) cubic-bezier(.22, .75, .2, 1);
-    will-change: left, top
+    will-change: left, top, transform
 }
 
 .tenutino-root[hidden] {
@@ -27,15 +29,17 @@
 }
 
 .tenutino-root.is-following-playback {
-    transition:
-        left 90ms linear,
-        top 260ms cubic-bezier(.22, .75, .2, 1)
+    transition: none;
+    transform: translate3d(
+        var(--tenutino-playback-x),
+        var(--tenutino-playback-y),
+        0
+    );
+    will-change: transform
 }
 
 .tenutino-root.is-following-playback.is-parkouring {
-    transition:
-        left 90ms linear,
-        top 70ms linear
+    transition: none
 }
 
 .tenutino-character {
