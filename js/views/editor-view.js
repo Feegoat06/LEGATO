@@ -15,7 +15,7 @@
  * ProjectStore so localStorage stays in sync without a manual save button.
  */
 import { compile, makeChord, makeTheme, reconcileSeams, beatsToBars, isTechniqueUsable } from '../state.js';
-import { chordDisplayName, notesFrom } from '../engine/chords.js';
+import { chordDisplayName } from '../engine/chords.js';
 import { TECHNIQUES } from '../engine/techniques.js';
 import { evaluateAllTechniques } from '../engine/technique-eligibility.js';
 import { playSegments, stopPlayback, pausePlayback, resumePlayback } from '../audio/playback.js';
@@ -116,17 +116,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
           onAddChord() {
             editingId = null;
             openPianoModal(pianoDialog, null, saveChord, progression.settings.timeSig, progression.settings.key);
-          },
-          onQuickAddChord(rootMidi, quality) {
-            // Empty-state quick chips: append a diatonic triad with the same
-            // display hint the demo projects use, then flow through the
-            // saveChord path so autosave/coach/rerender all fire.
-            editingId = null;
-            saveChord({
-              notes: notesFrom(rootMidi, quality),
-              bars: 1,
-              hint: { rootMidi, quality },
-            });
           },
           onEditChord(chord) {
             editingId = chord.id;

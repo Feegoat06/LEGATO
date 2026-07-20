@@ -82,6 +82,9 @@
 
 .view-all-projects {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 12px;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-pill);
@@ -94,14 +97,27 @@
     transition: color .12s ease, border-color .12s ease
 }
 
+.view-all-projects .ui-icon {
+    width: 14px;
+    height: 14px
+}
+
 .view-all-projects:hover {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 55.0%, transparent)
 }
 
 .editor-scroll {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
+    display: flex;
+    flex-direction: column;
     padding-bottom: 70px
+}
+
+.editor-scroll--empty {
+    padding-bottom: 0
 }
 
 .intro-block {
@@ -251,18 +267,20 @@
     border-bottom: 1px solid var(--hairline)
 }
 
+/* With no chord rows, let the empty state use the unused viewport height so
+   its message sits in the center of the composition area. */
+.editor-section--empty {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column
+}
+
 .section-title {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 14px
-}
-
-.workspace-section-title {
-    font: 700 clamp(1.5rem, 2vw, 1.75rem)/1 var(--font-body);
-    letter-spacing: -.015em;
-    color: var(--ivory);
-    margin: 0
 }
 
 .section-title .primary-action {
@@ -282,6 +300,12 @@
 .progression-list {
     display: grid;
     gap: 12px
+}
+
+.editor-section--empty .progression-list {
+    flex: 1;
+    min-height: 0;
+    display: flex
 }
 
 /* Chord row card. Accent border-left is the visual seam between the chord's
@@ -392,11 +416,13 @@
     opacity: 1
 }
 
-/* Empty state — no chords yet. Illustrated Tenutino card with quick-chord
-   chips. Replaces the old one-line dashed placeholder. */
+/* Empty state — no chords yet. Illustrated Tenutino card replacing the old
+   one-line dashed placeholder. */
 .empty-state {
     display: grid;
     justify-items: center;
+    align-content: center;
+    flex: 1;
     gap: 18px;
     padding: 40px 24px 44px;
     background: var(--panel);
@@ -437,34 +463,6 @@
     color: var(--tan-dim);
     font: 500 var(--fs-copy) var(--font-body);
     line-height: 1.5
-}
-
-.empty-state-quick-chords {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px
-}
-
-/* Quick-chord chip. Uses the chord font so the glyph reads as an actual
-   chord symbol, not a UI label. */
-.quick-chord-chip {
-    padding: 8px 16px;
-    background: var(--accent);
-    color: var(--ink);
-    border: 0;
-    border-radius: var(--radius-pill);
-    font-family: var(--font-chord);
-    font-weight: var(--font-chord-weight);
-    font-style: var(--font-chord-style);
-    font-size: 1rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: filter .15s ease
-}
-
-.quick-chord-chip:hover {
-    filter: brightness(1.08)
 }
 
 /* Transition seam — the space between two chord cards. Design shows a 2px

@@ -23,7 +23,7 @@ const TEMPLATE = `
       <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
       <span class="brand">LEGATO</span>
     </div>
-    <span class="landing-tagline">Composition workspace</span>
+    <span class="landing-tagline"><a class="landing-github-link" href="https://github.com/Feegoat06/OpenAI_Build_Week_Project" target="_blank" rel="noopener noreferrer" aria-label="Open the LEGATO GitHub repository">${ icon('github') }</a><span>Created with ♥ and ♫ from Fee, Louie, and Eric</span></span>
   </header>
 
   <section class="landing-hero">
@@ -37,7 +37,7 @@ const TEMPLATE = `
 
     <section class="landing-section" aria-labelledby="landing-recent-title">
       <div class="landing-section-head">
-        <h2 id="landing-recent-title">Recent projects</h2>
+        <h2 id="landing-recent-title" class="section-heading">Recent projects</h2>
         <span id="landing-recent-count" class="landing-count"></span>
         <div class="landing-section-utilities">
           <button id="landing-import" class="landing-secondary" type="button">Import…</button>
@@ -53,7 +53,7 @@ const TEMPLATE = `
 
     <section class="landing-section" aria-labelledby="landing-demos-title">
       <div class="landing-section-head">
-        <h2 id="landing-demos-title">Demos</h2>
+        <h2 id="landing-demos-title" class="section-heading">Demos</h2>
         <span class="landing-count">curated by the LEGATO team</span>
       </div>
       <div id="landing-demos-grid" class="landing-grid landing-grid-rail"></div>
@@ -61,14 +61,16 @@ const TEMPLATE = `
 
     <section class="landing-section landing-trash" aria-labelledby="landing-trash-title">
       <div class="landing-trash-header">
-        <button id="landing-trash-toggle" class="landing-section-head landing-trash-toggle" type="button" aria-expanded="false" aria-controls="landing-trash-grid">
-          <h2 id="landing-trash-title">Trash</h2>
+        <button id="landing-trash-toggle" class="landing-section-head landing-trash-toggle" type="button" aria-expanded="false" aria-controls="landing-trash-region">
+          <h2 id="landing-trash-title" class="section-heading">Trash Bin</h2>
           <span id="landing-trash-count" class="landing-count">Empty</span>
           <span class="landing-trash-caret">${ icon('chevronDown') }</span>
         </button>
-        <button id="landing-trash-empty" class="landing-trash-empty" type="button" hidden>Empty trash</button>
+        <button id="landing-trash-empty" class="landing-trash-empty" type="button" hidden>${ icon('trash') }<span>Empty Trash</span></button>
       </div>
-      <div id="landing-trash-grid" class="landing-grid landing-trash-grid" hidden></div>
+      <div id="landing-trash-region" class="landing-trash-region" aria-hidden="true">
+        <div id="landing-trash-grid" class="landing-grid landing-trash-grid"></div>
+      </div>
     </section>
 
     <footer class="landing-footer">
@@ -92,6 +94,7 @@ export function mountLandingPanel({ container, callbacks }) {
   const demosGrid = shell.querySelector('#landing-demos-grid');
   const trashToggle = shell.querySelector('#landing-trash-toggle');
   const trashEmptyBtn = shell.querySelector('#landing-trash-empty');
+  const trashRegion = shell.querySelector('#landing-trash-region');
   const trashGrid = shell.querySelector('#landing-trash-grid');
   const trashCount = shell.querySelector('#landing-trash-count');
 
@@ -110,7 +113,8 @@ export function mountLandingPanel({ container, callbacks }) {
   trashToggle.onclick = () => {
     trashOpen = !trashOpen;
     trashToggle.setAttribute('aria-expanded', String(trashOpen));
-    trashGrid.hidden = !trashOpen;
+    trashRegion.classList.toggle('is-open', trashOpen);
+    trashRegion.setAttribute('aria-hidden', String(!trashOpen));
   };
   trashEmptyBtn.onclick = () => callbacks.onEmptyTrash();
 

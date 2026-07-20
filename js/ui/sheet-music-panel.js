@@ -30,7 +30,7 @@ const WHEEL_DELTA_PAGE_PX = 800;
 
 const TEMPLATE = `
 <header class="sheet-music-header">
-  <h2 class="workspace-section-title sheet-music-title">Sheet Music</h2>
+  <h2 class="section-heading sheet-music-title">Sheet Music</h2>
   <div id="sheet-music-chord-font-toggle" class="chord-font-toggle" role="radiogroup" aria-label="Chord symbol font">
     ${ CHORD_FONTS.map((font) => `<button type="button" class="chord-font-option" data-chord-font="${ font }" role="radio" aria-checked="false">${ CHORD_FONT_LABELS[font] }</button>`).join('') }
   </div>

@@ -30,10 +30,41 @@
 
 .landing-tagline {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     color: var(--tan-dim);
     font: 500 var(--fs-label) var(--font-body);
-    text-transform: uppercase;
-    letter-spacing: .18em
+    letter-spacing: .02em;
+}
+
+.landing-github-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
+    color: var(--tan-dim);
+    text-decoration: none;
+    transition: color .15s ease, border-color .15s ease, background .15s ease
+}
+
+.landing-github-link .ui-icon {
+    width: 16px;
+    height: 16px
+}
+
+.landing-github-link:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent)
+}
+
+.landing-github-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
 }
 
 .landing-hero {
@@ -150,13 +181,6 @@
     width: 100%
 }
 
-.landing-section-head h2 {
-    font: 500 var(--fs-eyebrow) var(--font-body);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    margin: 0
-}
-
 .landing-count {
     color: var(--tan-dim);
     font: 400 var(--fs-eyebrow) var(--font-body);
@@ -178,13 +202,19 @@
 
 .landing-trash-caret {
     margin-left: auto;
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     color: var(--tan-dim);
-    transition: transform .15s ease
+    transition: transform .2s ease
 }
 
 .landing-trash-caret .ui-icon {
-    width: 16px;
-    height: 16px
+    width: 20px;
+    height: 20px
 }
 
 .landing-trash-toggle[aria-expanded="true"] .landing-trash-caret {
@@ -192,20 +222,57 @@
 }
 
 .landing-trash-empty {
-    padding: 7px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
     border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    border-radius: var(--radius-pill);
     background: transparent;
     color: var(--danger);
-    font: 500 .62rem var(--font-body);
-    letter-spacing: .14em;
-    text-transform: uppercase;
+    font: 600 .78rem var(--font-body);
+    letter-spacing: .02em;
     cursor: pointer;
-    transition: border-color .15s ease, background .15s ease
+    transition: border-color .15s ease, background .15s ease, color .15s ease
+}
+
+.landing-trash-empty .ui-icon {
+    width: 16px;
+    height: 16px
 }
 
 .landing-trash-empty:hover {
     border-color: color-mix(in srgb, var(--danger) 60%, transparent);
     background: color-mix(in srgb, var(--danger) 8%, transparent)
+}
+
+.landing-trash-empty:focus-visible {
+    outline: 2px solid var(--danger);
+    outline-offset: 3px
+}
+
+/* The grid wrapper animates as a single row, which lets the trash cards
+   expand and collapse at their natural height rather than snapping open. */
+.landing-trash-region {
+    display: grid;
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: grid-template-rows .26s ease, opacity .18s ease, transform .26s ease, visibility 0s linear .26s
+}
+
+.landing-trash-region.is-open {
+    grid-template-rows: 1fr;
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    transition: grid-template-rows .26s ease, opacity .18s ease, transform .26s ease, visibility 0s
+}
+
+.landing-trash-region > .landing-trash-grid {
+    min-height: 0;
+    overflow: hidden
 }
 
 .landing-grid {
@@ -501,6 +568,13 @@
 
     .landing-scroll {
         padding: 0 24px 60px
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing-trash-caret,
+    .landing-trash-region {
+        transition: none
     }
 }
 

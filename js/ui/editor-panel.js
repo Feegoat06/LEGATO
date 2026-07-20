@@ -15,16 +15,6 @@ import { escapeHtml } from '../util/html.js';
 import { majorKeyName, timeSigLabel, tempoLabel } from '../util/labels.js';
 import { icon } from './icons.js';
 
-// Quick-add chord chips shown in the empty state. Each is a diatonic
-// C-major chord — the four most common starting points for a new
-// progression. `rootMidi` is the octave the piano modal defaults to.
-const QUICK_CHORDS = [
-  { label: 'C',  rootMidi: 60, quality: 'Major' },
-  { label: 'Am', rootMidi: 57, quality: 'Minor' },
-  { label: 'F',  rootMidi: 53, quality: 'Major' },
-  { label: 'G',  rootMidi: 55, quality: 'Major' },
-];
-
 const TEMPLATE = `
 <header class="brand-block">
   <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
@@ -33,7 +23,7 @@ const TEMPLATE = `
       <span class="brand-subtitle">Progression coach</span>
     </span>
   </button>
-  <button id="view-all-projects" class="text-action view-all-projects" type="button">All projects</button>
+  <button id="view-all-projects" class="text-action view-all-projects" type="button">${ icon('home') }<span>All projects</span></button>
 </header>
 
 <div class="editor-scroll">
@@ -49,7 +39,7 @@ const TEMPLATE = `
 
   <section class="editor-section" aria-labelledby="chords-title">
     <div class="section-title">
-      <h2 id="chords-title" class="workspace-section-title">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
+      <h2 id="chords-title" class="section-heading">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
     </div>
     <div id="progression-list" class="progression-list"></div>
   </section>
@@ -60,7 +50,9 @@ export function mountEditorPanel({ container, callbacks }) {
   container.classList.add('editor-pane');
   container.innerHTML = TEMPLATE;
 
+  const editorScrollEl = container.querySelector('.editor-scroll');
   const progressionListEl = container.querySelector('#progression-list');
+  const chordsSectionEl = progressionListEl.closest('.editor-section');
   const addChordBtn = container.querySelector('#add-chord');
   const brandHomeBtn = container.querySelector('#brand-home');
   const viewAllBtn = container.querySelector('#view-all-projects');
@@ -177,7 +169,10 @@ export function mountEditorPanel({ container, callbacks }) {
 
   function renderProgression(progression, selectedSeam) {
     progressionListEl.replaceChildren();
-    if (!progression.chords.length) {
+    const isEmpty = !progression.chords.length;
+    editorScrollEl.classList.toggle('editor-scroll--empty', isEmpty);
+    chordsSectionEl.classList.toggle('editor-section--empty', isEmpty);
+    if (isEmpty) {
       progressionListEl.append(makeEmptyState());
       return;
     }
@@ -231,20 +226,9 @@ export function mountEditorPanel({ container, callbacks }) {
       </div>
       <div class="empty-state-copy">
         <h3 class="empty-state-headline">Tenutino is waiting.</h3>
-        <p class="empty-state-subcopy">Set the first chord. Everything follows from there.</p>
+        <p class="empty-state-subcopy">Add a chord to begin!</p>
       </div>
-      <div class="empty-state-quick-chords" role="group" aria-label="Quick-start chord"></div>
     `;
-    const chipRow = el.querySelector('.empty-state-quick-chords');
-    for (const chord of QUICK_CHORDS) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'quick-chord-chip';
-      chip.textContent = chord.label;
-      chip.setAttribute('aria-label', `Add ${ chord.label } chord`);
-      chip.onclick = () => callbacks.onQuickAddChord?.(chord.rootMidi, chord.quality);
-      chipRow.append(chip);
-    }
     return el;
   }
 
