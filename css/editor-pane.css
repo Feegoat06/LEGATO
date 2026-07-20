@@ -5,8 +5,8 @@
     height: 100vh;
     position: sticky;
     top: 0;
+    container-type: inline-size;
     background: var(--panel);
-    border-right: 1px solid var(--hairline);
     display: flex;
     flex-direction: column
 }
@@ -107,13 +107,15 @@
     border-color: color-mix(in srgb, var(--accent) 55.0%, transparent)
 }
 
+/* Structural passthrough. The brand-block, project-title-block, and the
+   Chords section title are all fixed; only the progression list inside the
+   Chords section scrolls (see .progression-list). */
 .editor-scroll {
     flex: 1;
     min-height: 0;
-    overflow: auto;
     display: flex;
     flex-direction: column;
-    padding-bottom: 70px
+    overflow: hidden
 }
 
 .editor-scroll--empty {
@@ -150,7 +152,42 @@
 .project-title-row {
     display: flex;
     align-items: baseline;
-    gap: 14px
+    gap: 14px;
+    min-width: 0
+}
+
+.project-name-field {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden
+}
+
+/* Applied only when the title value is wider than its input. The soft fade
+   and backdrop blur show that more of the title is available without getting
+   in the way while the user is editing it. */
+.project-name-field::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 64px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--panel) 78%, transparent) 58%, var(--panel));
+    backdrop-filter: blur(3px);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
+    mask-image: linear-gradient(90deg, transparent, #000 70%);
+    transition: opacity .18s ease
+}
+
+.project-name-field.is-truncated::after {
+    opacity: 1
+}
+
+.project-name-field:focus-within::after {
+    opacity: 0
 }
 
 /* Row of meta pills under the project title. First is filled (time sig,
@@ -199,7 +236,7 @@
 }
 
 .project-name-input {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     padding: 4px 0;
     border: 0;
@@ -253,6 +290,10 @@
     stroke-linejoin: round
 }
 
+.project-title-row.is-compact .edit-project-settings span {
+    display: none
+}
+
 .intro-copy,
 .section-copy {
     color: var(--tan-dim);
@@ -262,8 +303,14 @@
     max-width: 430px
 }
 
+/* Chords section owns the remaining panel height. Its title (heading + Add
+   Chord button) stays pinned; only the .progression-list below it scrolls. */
 .editor-section {
-    padding: 24px 26px 26px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 26px 0;
     border-bottom: 1px solid var(--hairline)
 }
 
@@ -277,14 +324,54 @@
 }
 
 .section-title {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 14px
 }
 
+.section-heading-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
 .section-title .primary-action {
     margin-left: auto
+}
+
+/* Cycles the chord cards through loose, compact, and dense layouts. The
+   icon-only affordance keeps the section header focused on its title. */
+.density-control {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-cell);
+    background: transparent;
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .12s ease, border-color .12s ease, background .12s ease
+}
+
+.density-control .ui-icon {
+    width: 17px;
+    height: 17px
+}
+
+.density-control:hover,
+.density-control:focus-visible {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent)
+}
+
+.density-control:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
 }
 
 .modal-controls label {
@@ -298,8 +385,41 @@
 }
 
 .progression-list {
+    --chord-row-min-height: 104px;
+    --chord-row-padding-block: 20px;
+    --chord-row-padding-inline-end: 20px;
+    --chord-row-padding-inline-start: 44px;
+    --chord-row-gap: 16px;
+    --chord-main-gap: 8px;
+    --chord-glyph-size: 2.4rem;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: grid;
-    gap: 12px
+    /* Prevent grid from stretching the row tracks to fill the scroll area —
+       otherwise a short list (esp. one card) balloons each row's height. */
+    align-content: start;
+    gap: 12px;
+    padding-bottom: 96px
+}
+
+/* Density changes only override the card's layout tokens. This keeps the
+   shared card styling in one place while each step grows progressively more
+   compact. */
+.progression-list[data-card-density="compact"] {
+    --chord-row-min-height: 84px;
+    --chord-row-padding-block: 14px;
+    --chord-row-gap: 12px;
+    --chord-main-gap: 10px;
+    --chord-glyph-size: 2.15rem
+}
+
+.progression-list[data-card-density="dense"] {
+    --chord-row-min-height: 68px;
+    --chord-row-padding-block: 10px;
+    --chord-row-gap: 12px;
+    --chord-glyph-size: 2.05rem
 }
 
 .editor-section--empty .progression-list {
@@ -309,23 +429,155 @@
 }
 
 /* Chord row card. Accent border-left is the visual seam between the chord's
-   identity and its content — matches the design's 4px accent stripe. */
+   identity and its content — matches the design's 4px accent stripe. The
+   drag handle is absolutely positioned over the left gutter so it doesn't
+   shift the chord content's grid or steal its left padding. */
 .chord-row {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr auto auto;
     align-items: center;
-    gap: 16px;
-    padding: 20px 20px 22px;
+    gap: var(--chord-row-gap);
+    /* Match the vertical breathing room around the chord label and notes. */
+    padding: var(--chord-row-padding-block) var(--chord-row-padding-inline-end) var(--chord-row-padding-block) var(--chord-row-padding-inline-start);
     background: var(--panel-3);
     border: 1px solid transparent;
     border-left: 4px solid var(--accent);
     border-radius: var(--radius-chord);
-    min-height: 92px;
-    transition: border-color .15s ease, background .15s ease
+    /* Keep the bottom padding real rather than letting the row's 92px
+       minimum squeeze it underneath the notes on compact layouts. */
+    min-height: var(--chord-row-min-height);
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease
 }
 
 .chord-row:hover {
     background: var(--panel-4)
+}
+
+/* Cards and seams share one motion. Exit states simply play that same
+   entrance in reverse. */
+.chord-row--entering,
+.transition-seam--entering,
+.chord-row--deleting,
+.transition-seam--deleting {
+    transform-origin: top center;
+}
+
+.chord-row--entering,
+.transition-seam--entering {
+    animation: surface-enter .34s cubic-bezier(.2, .8, .2, 1) both
+}
+
+.chord-row--deleting,
+.transition-seam--deleting {
+    pointer-events: none;
+    animation: surface-enter .34s cubic-bezier(.2, .8, .2, 1) reverse both
+}
+
+@keyframes surface-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(.975)
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chord-row--entering,
+    .chord-row--deleting,
+    .transition-seam--entering,
+    .transition-seam--deleting {
+        animation: none
+    }
+}
+
+/* Drag handle — sits absolutely in the left gutter over the accent stripe,
+   so grabbing it doesn't disturb the card's grid or push the chord content
+   in from its natural padding. Icon stays muted until the row is hovered or
+   focused so it doesn't compete with the chord glyph. */
+.chord-drag-handle {
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--tan-dim) 55%, transparent);
+    cursor: grab;
+    transition: color .15s ease
+}
+
+.chord-drag-handle .ui-icon {
+    width: 18px;
+    height: 18px;
+    pointer-events: none
+}
+
+.chord-row:hover .chord-drag-handle,
+.chord-drag-handle:focus-visible {
+    color: var(--accent)
+}
+
+.chord-drag-handle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 4px
+}
+
+/* Drag states — the moving card lifts slightly and the placeholder it leaves
+   behind is a dashed accent outline so the drop position stays obvious as
+   surrounding cards animate out of the way (SortableJS animation: 200). */
+.chord-row--drag-chosen {
+    cursor: grabbing
+}
+
+.chord-row--drag-chosen .chord-drag-handle {
+    cursor: grabbing;
+    color: var(--accent)
+}
+
+.chord-row--drag-active,
+.chord-row--drag-fallback {
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .38);
+    background: var(--panel-4);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    /* SortableJS drives the fallback via translate3d on every pointermove.
+       Any transition on transform (or a base "all") would animate each step
+       and make the card visibly lag behind the cursor. */
+    transition: none
+}
+
+.chord-row--drag-ghost {
+    background: transparent;
+    border: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+    border-left: 4px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    opacity: .35
+}
+
+.chord-row--drag-ghost > * {
+    visibility: hidden
+}
+
+/* Transition seams sit between chord rows in the DOM but aren't draggable.
+   Fade them out during a drag so the placeholder-and-neighbours animation
+   reads cleanly; the post-reorder re-render brings them back in place. */
+.progression-list--dragging .transition-seam {
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .12s ease
+}
+
+.transition-seam {
+    transition: opacity .18s ease
 }
 
 .chord-main {
@@ -337,14 +589,14 @@
     cursor: pointer;
     padding: 0;
     display: grid;
-    gap: 8px
+    gap: var(--chord-main-gap)
 }
 
 /* The chord glyph — biggest visual element in the whole editor. Uses the
    toggle-driven chord font (jazztext or classical). */
 .chord-main strong {
     display: block;
-    font-size: 2.4rem;
+    font-size: var(--chord-glyph-size);
     color: var(--ivory)
 }
 
@@ -357,6 +609,26 @@
     font: var(--font-chord-weight) 1rem var(--font-chord);
     font-style: var(--font-chord-style);
     letter-spacing: .04em
+}
+
+/* Compact cards keep exact note names available without adding a second line;
+   dense cards reserve the available height for the chord identity alone. */
+.progression-list[data-card-density="compact"] .chord-main {
+    display: flex;
+    align-items: baseline
+}
+
+.progression-list[data-card-density="compact"] .chord-main strong {
+    flex: 0 0 auto;
+    white-space: nowrap
+}
+
+.progression-list[data-card-density="compact"] .chord-main small {
+    min-width: 0
+}
+
+.progression-list[data-card-density="dense"] .chord-main small {
+    display: none
 }
 
 /* Beats readout — a two-color display (bright number + muted "beats") layered
@@ -574,6 +846,15 @@
         overflow: visible
     }
 
+    .editor-section {
+        flex: 0 0 auto
+    }
+
+    .progression-list {
+        flex: 0 0 auto;
+        overflow: visible
+    }
+
     .app-shell .editor-pane {
         border-right: 0;
         border-bottom: 1px solid var(--hairline)
@@ -583,13 +864,5 @@
 @media(max-width:650px) {
     .chord-row {
         grid-template-columns: 1fr 48px 28px
-    }
-
-    .project-title-row {
-        flex-wrap: wrap
-    }
-
-    .edit-project-settings span {
-        display: none
     }
 }
