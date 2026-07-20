@@ -47,17 +47,17 @@ const TEMPLATE = `
 <div class="transport-row">
   <div id="transport-mount"></div>
   <div class="sheet-music-controls">
-    <label class="tempo-control">
+    <label>
       <span>Tempo</span>
-      <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
-      <span class="tempo-value">
+      <div class="tempo-control">
+        <input id="sheet-music-tempo-slider" type="range" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" />
         <input id="sheet-music-tempo-input" type="number" min="${ TEMPO_MIN }" max="${ TEMPO_MAX }" step="1" inputmode="numeric" />
         <small>BPM</small>
-      </span>
+      </div>
     </label>
-    <label class="clef-control">
+    <label>
       <span>Clef</span>
-      <select id="sheet-music-clef">
+      <select id="sheet-music-clef" class="form-select">
         <option value="auto">Auto</option>
         <option value="treble">Treble</option>
         <option value="bass">Bass</option>

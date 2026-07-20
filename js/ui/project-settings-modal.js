@@ -89,22 +89,23 @@ const DIALOG_TEMPLATE = `
         </label>
         <div class="settings-grid">
           <label id="project-settings-tempo-field"><span>Tempo</span>
-            <div class="tempo-input-row">
+            <div class="tempo-control">
+              <input id="project-settings-tempo-slider" type="range" ${ TEMPO_INPUT_ATTRS } />
               <input id="project-settings-tempo" type="number" ${ TEMPO_INPUT_ATTRS } />
               <small>BPM</small>
             </div>
           </label>
           <label id="project-settings-meter-type-field"><span>Meter type</span>
-            <select id="project-settings-meter-type">
+            <select id="project-settings-meter-type" class="form-select">
               <option value="simple">Simple</option>
               <option value="compound">Compound</option>
             </select>
           </label>
           <label id="project-settings-meter-field"><span>Time signature</span>
-            <select id="project-settings-meter"></select>
+            <select id="project-settings-meter" class="form-select"></select>
           </label>
           <label id="project-settings-clef-field"><span>Clef</span>
-            <select id="project-settings-clef">
+            <select id="project-settings-clef" class="form-select">
               <option value="auto">Auto</option>
               <option value="treble">Treble</option>
               <option value="bass">Bass</option>
@@ -299,6 +300,7 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
   const nameInput = dialog.querySelector('#project-settings-name-input');
   const settingsGrid = dialog.querySelector('.settings-grid');
   const tempoInput = dialog.querySelector('#project-settings-tempo');
+  const tempoSlider = dialog.querySelector('#project-settings-tempo-slider');
   const meterTypeField = dialog.querySelector('#project-settings-meter-type-field');
   const meterField = dialog.querySelector('#project-settings-meter-field');
   const meterTypeSelect = dialog.querySelector('#project-settings-meter-type');
@@ -319,6 +321,14 @@ export function openProjectSettingsModal(dialog, { mode, initial, onSubmit, onAc
 
   nameInput.value = initial.name ?? '';
   tempoInput.value = String(initial.settings.tempo);
+  tempoSlider.value = String(initial.settings.tempo);
+  // Two views on one value — mirror across slider/number so either input
+  // reflects the user's latest edit without clamping until commit().
+  tempoSlider.oninput = () => { tempoInput.value = tempoSlider.value; };
+  tempoInput.oninput = () => {
+    const parsed = Number(tempoInput.value);
+    if (Number.isFinite(parsed)) tempoSlider.value = String(parsed);
+  };
   const initialMeter = `${ initial.settings.timeSig.num }/${ initial.settings.timeSig.den }`;
   const initialMeterType = initial.settings.meterType ?? (isCompoundMeter(initial.settings.timeSig) ? 'compound' : 'simple');
   meterTypeSelect.value = initialMeterType;

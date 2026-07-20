@@ -60,8 +60,8 @@
 
 :root {
     /* Surfaces, darkest → lightest. */
-    --ink: #16130F;
-    --panel: #1B170F;
+    --ink: #141210;
+    --panel: #16130F;
     --panel-2: #1E1912;
     --panel-3: #231E14;
     --panel-4: #271F16;
@@ -296,26 +296,134 @@ body {
     color: var(--danger)
 }
 
-/* Shared form select styling used by settings-grid, modal-controls, and
-   transition editors. The chord-row beats select opts out (own layered
-   treatment in editor-pane.css). */
+/* Shared form select styling. `.form-select` is the reusable primitive;
+   the container selectors below force `width: 100%` for the grid contexts
+   they own (settings-grid rows, modal-controls, transition editors). The
+   chord-row beats select opts out (own layered treatment in editor-pane.css). */
+.form-select,
 .settings-grid select,
 .modal-controls select,
 .transition-select {
-    width: 100%;
     border: 1px solid var(--hairline);
     border-radius: var(--radius-cell);
     background: var(--panel-3);
     color: var(--ivory);
-    font: 400 var(--fs-copy) var(--font-body);
-    padding: 10px;
-    outline: none
+    font: 500 .85rem var(--font-body);
+    padding: 9px 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .12s ease
 }
 
+.form-select:focus,
 .settings-grid select:focus,
 .modal-controls select:focus,
 .transition-select:focus {
     border-color: var(--accent)
+}
+
+.settings-grid select,
+.modal-controls select,
+.transition-select {
+    width: 100%
+}
+
+/* Tempo widget — shared between the sheet-music toolbar and the project-
+   settings modal. Groups a range slider with a compact numeric override and
+   a "BPM" caption. Callers wire slider ↔ number sync in JS. The outer label
+   sets its own layout (inline-flex row in the toolbar, grid cell in the
+   modal); this class only owns the internal group. */
+.tempo-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0
+}
+
+.tempo-control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 200px;
+    min-width: 140px;
+    height: 8px;
+    margin: 0;
+    padding: 0;
+    background: color-mix(in srgb, var(--tan-dim) 22%, transparent);
+    border-radius: var(--radius-pill);
+    outline: none;
+    cursor: pointer
+}
+
+.tempo-control input[type="range"]::-webkit-slider-runnable-track {
+    height: 8px;
+    background: transparent;
+    border-radius: var(--radius-pill)
+}
+
+.tempo-control input[type="range"]::-moz-range-track {
+    height: 8px;
+    background: color-mix(in srgb, var(--tan-dim) 22%, transparent);
+    border-radius: var(--radius-pill)
+}
+
+.tempo-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 70%, transparent), 0 2px 8px rgba(0, 0, 0, .35);
+    cursor: pointer;
+    transition: transform .15s ease
+}
+
+.tempo-control input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 70%, transparent), 0 2px 8px rgba(0, 0, 0, .35);
+    cursor: pointer;
+    transition: transform .15s ease
+}
+
+.tempo-control input[type="range"]:hover::-webkit-slider-thumb,
+.tempo-control input[type="range"]:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12)
+}
+
+.tempo-control input[type="range"]:hover::-moz-range-thumb,
+.tempo-control input[type="range"]:focus-visible::-moz-range-thumb {
+    transform: scale(1.12)
+}
+
+.tempo-control input[type="number"] {
+    flex: 0 0 auto;
+    width: 72px;
+    padding: 8px 10px;
+    background: var(--panel-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-cell);
+    color: var(--ivory);
+    font: 600 .88rem var(--font-body);
+    text-align: center;
+    outline: none;
+    transition: border-color .12s ease
+}
+
+.tempo-control input[type="number"]:focus {
+    border-color: var(--accent)
+}
+
+.tempo-control small {
+    color: var(--tan-dim);
+    font: 500 var(--fs-label) var(--font-body);
+    letter-spacing: .1em;
+    text-transform: uppercase
 }
 
 /* Chord symbol — the playful spot. Used by every place that renders a chord

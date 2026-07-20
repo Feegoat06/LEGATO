@@ -408,6 +408,7 @@ export function openPianoModal(dialog, existingChord, onSave, timeSig = { num: 4
  */
 export function populateChordControls(dialog) {
   const root = dialog.querySelector('#modal-root');
+  root.replaceChildren();
   PITCH_CLASS_LABELS.forEach((label, pc) => root.add(new Option(label, String(pc))));
   const chips = dialog.querySelector('#modal-quality-chips');
   chips.replaceChildren();

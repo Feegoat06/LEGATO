@@ -24,6 +24,10 @@
     --font-chord: var(--font-chord-classical);
     --font-chord-style: normal;
     --font-chord-weight: 700;
+    /* Edwin's wider glyphs need a slightly smaller scale to sit comfortably
+       within the circle-of-fifths wedges. */
+    --fs-wedge-major: .88rem;
+    --fs-wedge-minor: .68rem;
 }
 
 .project-settings-shell {
@@ -112,13 +116,15 @@
     letter-spacing: .1em;
 }
 
-/* Creation needs two deliberate rows: establish the meter family first,
-   then set the performance details. The dialog keeps its existing width. */
+/* Creation pairs meter-type + time-signature on one row (they narrow each
+   other conceptually), then gives tempo and clef their own full-width rows
+   so the tempo slider has enough horizontal room. */
 .project-settings-shell .settings-grid.is-create {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
         "meter-type meter"
-        "tempo clef";
+        "tempo tempo"
+        "clef clef";
     column-gap: 18px;
     row-gap: 10px;
 }
@@ -128,45 +134,8 @@
 .project-settings-shell .settings-grid.is-create #project-settings-tempo-field { grid-area: tempo; }
 .project-settings-shell .settings-grid.is-create #project-settings-clef-field { grid-area: clef; }
 
-.project-settings-shell .settings-grid select {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--hairline);
-    background: rgba(23, 18, 14, .65);
-    color: var(--ivory);
-    font: 400 var(--fs-copy) var(--font-body);
-}
-
-.tempo-input-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.tempo-input-row input {
-    flex: 1;
-    min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--hairline);
-    background: rgba(23, 18, 14, .65);
-    color: var(--ivory);
-    font: 500 .85rem var(--font-body);
-    outline: none;
-    transition: border-color .12s ease;
-}
-
-.tempo-input-row input:hover {
-    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-.tempo-input-row input:focus {
-    border-color: var(--accent);
-}
-
-.tempo-input-row small {
-    font: var(--fs-label) var(--font-body);
-    color: var(--tan-dim);
-}
+/* Selects and the tempo widget use the shared .form-select / .tempo-control
+   primitives defined in base.css. No modal-local overrides needed. */
 
 /* Key signature — dial */
 .key-signature-fieldset {
