@@ -1,11 +1,12 @@
-/* the 88-key piano tile selector, quality chips, mini VexFlow
-   preview, and octave shifters. */
+/* the 88-key piano tile selector, quality chips, chord name preview,
+   mini VexFlow preview, and octave shifters. */
 
 dialog {
     border: 0;
     padding: 0;
     width: min(1180px, 94vw);
     max-width: none;
+    max-height: calc(100vh - 32px);
     background: transparent;
     color: var(--ivory)
 }
@@ -20,7 +21,9 @@ dialog::backdrop {
     border: 1px solid var(--hairline);
     border-radius: var(--radius-card);
     box-shadow: 0 30px 120px #000;
-    padding: 30px
+    padding: 30px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
 }
 
 .dialog-header {
@@ -31,11 +34,16 @@ dialog::backdrop {
     border-bottom: 1px solid var(--hairline)
 }
 
-.dialog-header h2 {
-    font: var(--font-chord-weight) 3.2rem/.95 var(--font-chord);
-    font-style: var(--font-chord-style);
-    color: var(--ivory);
-    margin: 8px 0
+/* Piano modal title uses body font (matching project settings style),
+   NOT the chord font — stays consistent regardless of JazzText/Classical. */
+.piano-modal-shell .dialog-header h2 {
+    margin: 0;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-style: normal;
+    font-size: 2.45rem;
+    line-height: 1;
+    letter-spacing: -.045em;
 }
 
 .dialog-header p:last-child {
@@ -48,30 +56,88 @@ dialog::backdrop {
     font-size: 2rem
 }
 
-.modal-controls {
+/* Two-column layout: left = controls + quality chips + piano,
+   right = detected chord + preview panel. */
+.piano-stage {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
-    gap: 12px;
-    align-items: end;
-    padding: 20px 0
+    grid-template-columns: 1fr minmax(240px, 300px);
+    gap: 22px;
+    align-items: start;
+    padding-top: 20px;
 }
 
-/* Root options are pitch-class notation, so they follow the active score
-   font rather than the surrounding interface typography. */
+.piano-column {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Root + Duration dropdowns row */
+.modal-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: end;
+    padding-bottom: 14px;
+}
+
+.modal-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.modal-controls label > span {
+    color: var(--tan-dim);
+    font: 400 var(--fs-label) var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.modal-controls select {
+    padding: 8px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-cell);
+    background: rgba(23, 18, 14, .65);
+    color: var(--ivory);
+    font: 400 var(--fs-copy) var(--font-body);
+}
+
 #modal-root {
     font-family: var(--font-chord);
     font-weight: var(--font-chord-weight);
     font-style: var(--font-chord-style);
 }
 
-.outline-button {
-    height: 37px;
+/* Quality chips — pill-shaped, right above the piano. */
+.quality-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 0 16px;
+}
+
+.quality-chip {
     border: 1px solid var(--hairline);
-    background: transparent;
+    border-radius: var(--radius-pill);
+    background: var(--panel-2);
     color: var(--tan);
-    font: 500 .6rem var(--font-body);
-    padding: 0 14px;
-    cursor: pointer
+    padding: 9px 16px;
+    font: 500 .72rem var(--font-body);
+    letter-spacing: .04em;
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+}
+
+.quality-chip:hover {
+    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent);
+    color: var(--ivory);
+}
+
+.quality-chip.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
 .piano-instruction {
@@ -129,8 +195,6 @@ dialog::backdrop {
 }
 
 .piano-key.black.selected {
-    /* Derive a darker shade of the current accent so any mood color reads
-       correctly against the black-key surrounds without a per-color table. */
     background: color-mix(in srgb, var(--accent) 75%, black);
     color: #fff
 }
@@ -140,129 +204,66 @@ dialog::backdrop {
     position: absolute;
     bottom: 8px;
     left: 50%;
-    width: 4px;
-    height: 4px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: var(--accent);
-    transform: translateX(-50%)
+    transform: translateX(-50%);
+    animation: dot-pulse 1.8s ease-in-out infinite;
 }
 
-.selection-readout {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    border: 1px solid var(--hairline);
-    margin-top: 13px
+.piano-key.white.quality-tone:not(.selected)::after {
+    background: #18120e;
 }
 
-.selection-readout>div {
-    padding: 12px 15px
+@keyframes dot-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .25; }
 }
 
-.selection-readout>div+div {
-    border-left: 1px solid var(--hairline)
-}
-
-.selection-readout span {
-    display: block;
-    color: var(--tan-dim);
-    font: 400 var(--fs-label) var(--font-body);
-    text-transform: uppercase;
-    letter-spacing: .1em;
-    margin-bottom: 5px
-}
-
-.selection-readout strong {
-    font: var(--font-chord-weight) .67rem var(--font-chord);
-    font-style: var(--font-chord-style);
-    color: var(--ivory)
-}
-
-.dialog-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 20px
-}
-
-.dialog-footer p {
-    color: var(--tan-dim);
-    font-size: var(--fs-copy);
-    margin: 0
-}
-
-.save-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: var(--accent);
-    color: var(--ink);
-    padding: 12px 22px;
-    font: 600 .78rem var(--font-body);
-    cursor: pointer;
-    transition: filter .15s ease
-}
-
-.save-button:hover {
-    filter: brightness(1.08)
-}
-
-.save-button .ui-icon {
-    width: 16px;
-    height: 16px
-}
-
-.quality-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 0 18px
-}
-
-.quality-chip {
-    border: 1px solid var(--hairline);
-    background: var(--panel-2);
-    color: var(--tan);
-    padding: 9px 15px;
-    font: 500 .62rem var(--font-body);
-    letter-spacing: .06em;
-    cursor: pointer;
-    transition: border-color .15s, color .15s, background .15s
-}
-
-.quality-chip:hover {
-    border-color: color-mix(in srgb, var(--accent) 55.0%, transparent);
-    color: var(--ivory)
-}
-
-.quality-chip.is-active {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 9%, transparent)
-}
-
-.piano-stage {
-    display: grid;
-    grid-template-columns: 1fr minmax(220px, 260px);
-    gap: 22px;
-    align-items: start
-}
-
-.piano-column {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px
-}
-
+/* Preview panel — right column. */
 .preview-panel {
     border: 1px solid var(--hairline);
+    border-radius: var(--radius-cell);
     background: var(--panel-2);
     padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 12px
+}
+
+/* Chord name preview — large glyph mirroring the editor card display. */
+.chord-name-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.chord-name-preview-label {
+    color: var(--tan-dim);
+    font: 400 var(--fs-label) var(--font-body);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.chord-name-preview-glyph {
+    font: var(--font-chord-weight) 3.6rem/1 var(--font-chord);
+    font-style: var(--font-chord-style);
+    color: var(--accent);
+    text-align: center;
+    min-height: 1.1em;
+    transition: color .15s;
+}
+
+.chord-name-preview-glyph.is-empty {
+    color: var(--tan-dim);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-style: normal;
+    font-size: 2rem;
 }
 
 .preview-header {
@@ -288,6 +289,7 @@ dialog::backdrop {
 
 .preview-play {
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: var(--radius-pill);
     background: transparent;
     color: var(--accent);
     width: 22px;
@@ -316,6 +318,7 @@ dialog::backdrop {
 
 .preview-sheet {
     background: var(--panel);
+    border-radius: var(--radius-cell);
     min-height: 140px;
     display: flex;
     align-items: center;
@@ -357,6 +360,7 @@ dialog::backdrop {
     gap: 7px;
     flex: 1;
     border: 1px solid var(--hairline);
+    border-radius: var(--radius-pill);
     background: transparent;
     color: var(--tan);
     padding: 9px;
@@ -381,35 +385,66 @@ dialog::backdrop {
     cursor: not-allowed
 }
 
-@media(max-width:1000px) {
-    .modal-controls {
-        grid-template-columns: 1fr 1fr
-    }
+/* Footer */
+.dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-top: 20px
+}
 
+.save-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--ink);
+    padding: 12px 28px;
+    font: 600 .78rem var(--font-body);
+    cursor: pointer;
+    transition: filter .15s ease
+}
+
+.save-button:hover {
+    filter: brightness(1.08)
+}
+
+.save-button:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.save-button .ui-icon {
+    width: 16px;
+    height: 16px
+}
+
+@media(max-width:1000px) {
     .piano-stage {
         grid-template-columns: 1fr
     }
 }
 
 @media(max-width:650px) {
-    .selection-readout {
-        grid-template-columns: 1fr
-    }
-
-    .selection-readout>div+div {
-        border-left: 0;
-        border-top: 1px solid var(--hairline)
-    }
-
     .dialog-shell {
         padding: 20px
     }
 
-    .dialog-header h2 {
-        font-size: 2.5rem
+    .piano-modal-shell .dialog-header h2 {
+        font-size: 2rem
     }
 
     .piano-key {
         flex-basis: 31px
+    }
+
+    .chord-name-preview-glyph {
+        font-size: 2.6rem;
+    }
+
+    .modal-controls {
+        grid-template-columns: 1fr;
     }
 }
