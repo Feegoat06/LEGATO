@@ -15,6 +15,8 @@ import { escapeHtml } from '../util/html.js';
 import { majorKeyName, timeSigLabel, tempoLabel } from '../util/labels.js';
 import { icon } from './icons.js';
 
+const CARD_DENSITIES = ['loose', 'compact', 'dense'];
+
 const TEMPLATE = `
 <header class="brand-block">
   <button id="brand-home" class="brand-home" type="button" aria-label="View all projects">
@@ -39,7 +41,11 @@ const TEMPLATE = `
 
   <section class="editor-section" aria-labelledby="chords-title">
     <div class="section-title">
-      <h2 id="chords-title" class="section-heading">Chords</h2><button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
+      <div class="section-heading-group">
+        <h2 id="chords-title" class="section-heading">Chords</h2>
+        <button id="cycle-card-density" class="density-control" type="button">${ icon('density') }</button>
+      </div>
+      <button id="add-chord" class="primary-action" type="button">${ icon('plus') }<span>Add Chord</span></button>
     </div>
     <div id="progression-list" class="progression-list"></div>
   </section>
@@ -54,6 +60,7 @@ export function mountEditorPanel({ container, callbacks }) {
   const progressionListEl = container.querySelector('#progression-list');
   const chordsSectionEl = progressionListEl.closest('.editor-section');
   const addChordBtn = container.querySelector('#add-chord');
+  const densityControlBtn = container.querySelector('#cycle-card-density');
 
   // Drag-to-reorder chord cards. SortableJS observes DOM mutations, so the
   // instance survives the replaceChildren() inside renderProgression().
@@ -88,8 +95,14 @@ export function mountEditorPanel({ container, callbacks }) {
   const metaPillsEl = container.querySelector('#project-meta-pills');
   const expandedSeamIndexes = new Set();
   let directEditorOpenForCurrentRender = null;
+  let cardDensity = 'loose';
 
   addChordBtn.onclick = () => callbacks.onAddChord();
+  densityControlBtn.onclick = () => {
+    const currentIndex = CARD_DENSITIES.indexOf(cardDensity);
+    cardDensity = CARD_DENSITIES[(currentIndex + 1) % CARD_DENSITIES.length];
+    syncCardDensity();
+  };
   brandHomeBtn.onclick = () => callbacks.onGoHome();
   viewAllBtn.onclick = () => callbacks.onGoHome();
   editSettingsBtn.onclick = () => callbacks.onEditProjectSettings();
@@ -98,6 +111,16 @@ export function mountEditorPanel({ container, callbacks }) {
     if (event.key === 'Enter') { event.preventDefault(); projectNameInput.blur(); }
     if (event.key === 'Escape') { projectNameInput.value = projectNameInput.dataset.lastCommitted ?? ''; projectNameInput.blur(); }
   };
+
+  function syncCardDensity() {
+    const nextDensity = CARD_DENSITIES[(CARD_DENSITIES.indexOf(cardDensity) + 1) % CARD_DENSITIES.length];
+    const currentLabel = cardDensity[0].toUpperCase() + cardDensity.slice(1);
+    const nextLabel = nextDensity[0].toUpperCase() + nextDensity.slice(1);
+    progressionListEl.dataset.cardDensity = cardDensity;
+    densityControlBtn.dataset.cardDensity = cardDensity;
+    densityControlBtn.setAttribute('aria-label', `Chord card density: ${ currentLabel }. Switch to ${ nextLabel }.`);
+    densityControlBtn.title = `Card density: ${ currentLabel }. Switch to ${ nextLabel }.`;
+  }
 
   function makeChordRow(progression, chord, index) {
     const timeSig = progression.settings.timeSig;
@@ -268,6 +291,7 @@ export function mountEditorPanel({ container, callbacks }) {
 
   return {
     render({ progression, selectedSeam, projectName }) {
+      syncCardDensity();
       syncProjectName(projectName);
       renderMetaPills(progression.settings);
       renderProgression(progression, selectedSeam);

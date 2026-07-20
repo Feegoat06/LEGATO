@@ -292,8 +292,47 @@
     margin-bottom: 14px
 }
 
+.section-heading-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
 .section-title .primary-action {
     margin-left: auto
+}
+
+/* Cycles the chord cards through loose, compact, and dense layouts. The
+   icon-only affordance keeps the section header focused on its title. */
+.density-control {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-cell);
+    background: transparent;
+    color: var(--tan-dim);
+    cursor: pointer;
+    transition: color .12s ease, border-color .12s ease, background .12s ease
+}
+
+.density-control .ui-icon {
+    width: 17px;
+    height: 17px
+}
+
+.density-control:hover,
+.density-control:focus-visible {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent)
+}
+
+.density-control:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px
 }
 
 .modal-controls label {
@@ -307,6 +346,13 @@
 }
 
 .progression-list {
+    --chord-row-min-height: 104px;
+    --chord-row-padding-block: 20px;
+    --chord-row-padding-inline-end: 20px;
+    --chord-row-padding-inline-start: 44px;
+    --chord-row-gap: 16px;
+    --chord-main-gap: 8px;
+    --chord-glyph-size: 2.4rem;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -317,6 +363,24 @@
     align-content: start;
     gap: 12px;
     padding-bottom: 96px
+}
+
+/* Density changes only override the card's layout tokens. This keeps the
+   shared card styling in one place while each step grows progressively more
+   compact. */
+.progression-list[data-card-density="compact"] {
+    --chord-row-min-height: 84px;
+    --chord-row-padding-block: 14px;
+    --chord-row-gap: 12px;
+    --chord-main-gap: 10px;
+    --chord-glyph-size: 2.15rem
+}
+
+.progression-list[data-card-density="dense"] {
+    --chord-row-min-height: 68px;
+    --chord-row-padding-block: 10px;
+    --chord-row-gap: 12px;
+    --chord-glyph-size: 2.05rem
 }
 
 .editor-section--empty .progression-list {
@@ -334,16 +398,16 @@
     display: grid;
     grid-template-columns: 1fr auto auto;
     align-items: center;
-    gap: 16px;
+    gap: var(--chord-row-gap);
     /* Match the vertical breathing room around the chord label and notes. */
-    padding: 20px 20px 20px 44px;
+    padding: var(--chord-row-padding-block) var(--chord-row-padding-inline-end) var(--chord-row-padding-block) var(--chord-row-padding-inline-start);
     background: var(--panel-3);
     border: 1px solid transparent;
     border-left: 4px solid var(--accent);
     border-radius: var(--radius-chord);
     /* Keep the bottom padding real rather than letting the row's 92px
        minimum squeeze it underneath the notes on compact layouts. */
-    min-height: 104px;
+    min-height: var(--chord-row-min-height);
     transition: border-color .15s ease, background .15s ease, box-shadow .15s ease
 }
 
@@ -445,14 +509,14 @@
     cursor: pointer;
     padding: 0;
     display: grid;
-    gap: 8px
+    gap: var(--chord-main-gap)
 }
 
 /* The chord glyph — biggest visual element in the whole editor. Uses the
    toggle-driven chord font (jazztext or classical). */
 .chord-main strong {
     display: block;
-    font-size: 2.4rem;
+    font-size: var(--chord-glyph-size);
     color: var(--ivory)
 }
 
@@ -465,6 +529,26 @@
     font: var(--font-chord-weight) 1rem var(--font-chord);
     font-style: var(--font-chord-style);
     letter-spacing: .04em
+}
+
+/* Compact cards keep exact note names available without adding a second line;
+   dense cards reserve the available height for the chord identity alone. */
+.progression-list[data-card-density="compact"] .chord-main {
+    display: flex;
+    align-items: baseline
+}
+
+.progression-list[data-card-density="compact"] .chord-main strong {
+    flex: 0 0 auto;
+    white-space: nowrap
+}
+
+.progression-list[data-card-density="compact"] .chord-main small {
+    min-width: 0
+}
+
+.progression-list[data-card-density="dense"] .chord-main small {
+    display: none
 }
 
 /* Beats readout — a two-color display (bright number + muted "beats") layered
