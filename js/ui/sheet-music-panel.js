@@ -137,6 +137,10 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
   zoomInBtn.onclick = () => setZoom(zoom + ZOOM_STEP);
 
   window.addEventListener('resize', scheduleRerender);
+  const panelResizeObserver = typeof ResizeObserver === 'undefined'
+    ? null
+    : new ResizeObserver(scheduleRerender);
+  panelResizeObserver?.observe(container);
 
   setZoom(zoom);
 
@@ -199,6 +203,11 @@ export function mountSheetMusicPanel({ container, callbacks = {} }) {
     /** Effective (override-aware) settings used for playback and rendering. */
     getEffectiveSettings() {
       return effectiveSettings ?? baseSettings;
+    },
+    unmount() {
+      window.removeEventListener('resize', scheduleRerender);
+      panelResizeObserver?.disconnect();
+      cancelAnimationFrame(resizeFrame);
     },
   };
 }

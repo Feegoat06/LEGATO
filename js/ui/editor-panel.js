@@ -31,8 +31,10 @@ const TEMPLATE = `
 <div class="editor-scroll">
   <section class="project-title-block">
     <div class="project-title-row">
-      <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
-      <button id="edit-project-settings" class="edit-project-settings" type="button">
+      <div id="project-name-field" class="project-name-field">
+        <input id="project-name-input" class="project-name-input" type="text" spellcheck="false" autocomplete="off" aria-label="Project name" />
+      </div>
+      <button id="edit-project-settings" class="edit-project-settings" type="button" aria-label="Edit project settings">
         ${ icon('edit') }<span>Edit Project Settings</span>
       </button>
     </div>
@@ -90,6 +92,8 @@ export function mountEditorPanel({ container, callbacks }) {
   });
   const brandHomeBtn = container.querySelector('#brand-home');
   const viewAllBtn = container.querySelector('#view-all-projects');
+  const projectTitleRowEl = container.querySelector('.project-title-row');
+  const projectNameFieldEl = container.querySelector('#project-name-field');
   const projectNameInput = container.querySelector('#project-name-input');
   const editSettingsBtn = container.querySelector('#edit-project-settings');
   const metaPillsEl = container.querySelector('#project-meta-pills');
@@ -106,11 +110,20 @@ export function mountEditorPanel({ container, callbacks }) {
   brandHomeBtn.onclick = () => callbacks.onGoHome();
   viewAllBtn.onclick = () => callbacks.onGoHome();
   editSettingsBtn.onclick = () => callbacks.onEditProjectSettings();
+  projectNameInput.onfocus = () => {
+    projectNameInput.select();
+    requestAnimationFrame(() => { projectNameInput.scrollLeft = projectNameInput.scrollWidth; });
+  };
+  projectNameInput.oninput = syncProjectTitleLayout;
   projectNameInput.onblur = () => callbacks.onRenameProject(projectNameInput.value);
   projectNameInput.onkeydown = (event) => {
     if (event.key === 'Enter') { event.preventDefault(); projectNameInput.blur(); }
     if (event.key === 'Escape') { projectNameInput.value = projectNameInput.dataset.lastCommitted ?? ''; projectNameInput.blur(); }
   };
+  const projectTitleResizeObserver = typeof ResizeObserver === 'undefined'
+    ? null
+    : new ResizeObserver(syncProjectTitleLayout);
+  projectTitleResizeObserver?.observe(projectTitleRowEl);
 
   function syncCardDensity() {
     const nextDensity = CARD_DENSITIES[(CARD_DENSITIES.indexOf(cardDensity) + 1) % CARD_DENSITIES.length];
@@ -287,6 +300,28 @@ export function mountEditorPanel({ container, callbacks }) {
     if (document.activeElement === projectNameInput) return;
     projectNameInput.value = name ?? '';
     projectNameInput.dataset.lastCommitted = projectNameInput.value;
+    requestAnimationFrame(syncProjectTitleLayout);
+  }
+
+  function syncProjectTitleLayout() {
+    // Measure with the full label visible, then compact only if the whole
+    // project title, gap, and action cannot share the row.
+    projectTitleRowEl.classList.remove('is-compact');
+    const styles = getComputedStyle(projectNameInput);
+    const measureContext = document.createElement('canvas').getContext('2d');
+    measureContext.font = styles.font;
+    const titleWidth = measureContext.measureText(projectNameInput.value).width;
+    const gap = Number.parseFloat(getComputedStyle(projectTitleRowEl).gap) || 0;
+    const neededWidth = Math.ceil(titleWidth) + Math.ceil(editSettingsBtn.getBoundingClientRect().width) + gap;
+    projectTitleRowEl.classList.toggle('is-compact', neededWidth > projectTitleRowEl.clientWidth);
+    syncProjectNameOverflow();
+  }
+
+  function syncProjectNameOverflow() {
+    projectNameFieldEl.classList.toggle(
+      'is-truncated',
+      projectNameInput.scrollWidth > projectNameInput.clientWidth,
+    );
   }
 
   return {
@@ -298,6 +333,7 @@ export function mountEditorPanel({ container, callbacks }) {
     },
     unmount() {
       sortable?.destroy();
+      projectTitleResizeObserver?.disconnect();
     },
   };
 }

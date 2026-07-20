@@ -28,11 +28,14 @@ import { navigate, LANDING_HASH } from '../router.js';
 const SHELL_TEMPLATE = `
   <div class="app-shell">
     <aside id="editor-pane-mount"></aside>
+    <div id="panel-resizer" class="panel-resizer" role="separator" aria-label="Resize editor and notation panels" aria-orientation="vertical" aria-controls="editor-pane-mount sheet-music-pane-mount" tabindex="0"></div>
     <main id="sheet-music-pane-mount"></main>
   </div>
 `;
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
+const MIN_EDITOR_PANE_WIDTH = 410;
+const MIN_SHEET_MUSIC_PANE_WIDTH = 480;
 
 /**
  * @param {{ store: ReturnType<import('../persistence.js').createProjectStore>, pianoDialog: any, projectSettingsDialog: any }} deps
@@ -63,6 +66,85 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       // ── DOM shell + panels ──────────────────────────────────────────
       root.insertAdjacentHTML('beforeend', SHELL_TEMPLATE);
       const shell = root.querySelector('.app-shell');
+      const editorPaneMount = shell.querySelector('#editor-pane-mount');
+      const panelResizer = shell.querySelector('#panel-resizer');
+      let activeResizePointerId = null;
+
+      function isSideBySideLayout() {
+        return !window.matchMedia('(max-width: 1000px)').matches;
+      }
+
+      function getPaneResizeBounds() {
+        const shellBounds = shell.getBoundingClientRect();
+        const splitterWidth = panelResizer.getBoundingClientRect().width;
+        return {
+          left: shellBounds.left,
+          min: MIN_EDITOR_PANE_WIDTH,
+          max: Math.max(MIN_EDITOR_PANE_WIDTH, shellBounds.width - splitterWidth - MIN_SHEET_MUSIC_PANE_WIDTH),
+        };
+      }
+
+      function syncPanelResizer() {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const explicitWidth = Number.parseFloat(shell.style.getPropertyValue('--editor-pane-width'));
+        if (Number.isFinite(explicitWidth)) {
+          const clampedWidth = Math.min(max, Math.max(min, explicitWidth));
+          if (clampedWidth !== explicitWidth) shell.style.setProperty('--editor-pane-width', `${ clampedWidth }px`);
+        }
+        const editorWidth = Math.round(editorPaneMount.getBoundingClientRect().width);
+        panelResizer.setAttribute('aria-valuemin', String(min));
+        panelResizer.setAttribute('aria-valuemax', String(max));
+        panelResizer.setAttribute('aria-valuenow', String(editorWidth));
+        panelResizer.setAttribute('aria-valuetext', `Editor panel width ${ editorWidth } pixels`);
+      }
+
+      function setEditorPaneWidth(width) {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const nextWidth = Math.round(Math.min(max, Math.max(min, width)));
+        shell.style.setProperty('--editor-pane-width', `${ nextWidth }px`);
+        syncPanelResizer();
+      }
+
+      function stopPanelResize() {
+        activeResizePointerId = null;
+        shell.classList.remove('is-resizing');
+      }
+
+      panelResizer.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || !isSideBySideLayout()) return;
+        event.preventDefault();
+        activeResizePointerId = event.pointerId;
+        panelResizer.setPointerCapture(event.pointerId);
+        shell.classList.add('is-resizing');
+        const { left } = getPaneResizeBounds();
+        setEditorPaneWidth(event.clientX - left);
+      });
+      panelResizer.addEventListener('pointermove', (event) => {
+        if (event.pointerId !== activeResizePointerId) return;
+        const { left } = getPaneResizeBounds();
+        setEditorPaneWidth(event.clientX - left);
+      });
+      panelResizer.addEventListener('pointerup', stopPanelResize);
+      panelResizer.addEventListener('pointercancel', stopPanelResize);
+      panelResizer.addEventListener('lostpointercapture', stopPanelResize);
+      panelResizer.addEventListener('keydown', (event) => {
+        if (!isSideBySideLayout()) return;
+        const { min, max } = getPaneResizeBounds();
+        const currentWidth = editorPaneMount.getBoundingClientRect().width;
+        const step = event.shiftKey ? 80 : 24;
+        const nextWidth = event.key === 'ArrowLeft' ? currentWidth - step
+          : event.key === 'ArrowRight' ? currentWidth + step
+            : event.key === 'Home' ? min
+              : event.key === 'End' ? max
+                : null;
+        if (nextWidth == null) return;
+        event.preventDefault();
+        setEditorPaneWidth(nextWidth);
+      });
+      window.addEventListener('resize', syncPanelResizer);
+      requestAnimationFrame(syncPanelResizer);
 
       const sheetMusic = mountSheetMusicPanel({
         container: shell.querySelector('#sheet-music-pane-mount'),
@@ -333,9 +415,11 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       return {
         async unmount() {
           window.removeEventListener('beforeunload', beforeUnload);
+          window.removeEventListener('resize', syncPanelResizer);
           stopPlayback();
           await flushSave();
           editor.unmount?.();
+          sheetMusic.unmount?.();
           clearTheme();
           root.replaceChildren();
         },

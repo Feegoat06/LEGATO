@@ -5,8 +5,8 @@
     height: 100vh;
     position: sticky;
     top: 0;
+    container-type: inline-size;
     background: var(--panel);
-    border-right: 1px solid var(--hairline);
     display: flex;
     flex-direction: column
 }
@@ -152,7 +152,42 @@
 .project-title-row {
     display: flex;
     align-items: baseline;
-    gap: 14px
+    gap: 14px;
+    min-width: 0
+}
+
+.project-name-field {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden
+}
+
+/* Applied only when the title value is wider than its input. The soft fade
+   and backdrop blur show that more of the title is available without getting
+   in the way while the user is editing it. */
+.project-name-field::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 64px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--panel) 78%, transparent) 58%, var(--panel));
+    backdrop-filter: blur(3px);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
+    mask-image: linear-gradient(90deg, transparent, #000 70%);
+    transition: opacity .18s ease
+}
+
+.project-name-field.is-truncated::after {
+    opacity: 1
+}
+
+.project-name-field:focus-within::after {
+    opacity: 0
 }
 
 /* Row of meta pills under the project title. First is filled (time sig,
@@ -201,7 +236,7 @@
 }
 
 .project-name-input {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     padding: 4px 0;
     border: 0;
@@ -253,6 +288,10 @@
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round
+}
+
+.project-title-row.is-compact .edit-project-settings span {
+    display: none
 }
 
 .intro-copy,
@@ -784,13 +823,5 @@
 @media(max-width:650px) {
     .chord-row {
         grid-template-columns: 1fr 48px 28px
-    }
-
-    .project-title-row {
-        flex-wrap: wrap
-    }
-
-    .edit-project-settings span {
-        display: none
     }
 }
