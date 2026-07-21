@@ -106,6 +106,7 @@ For a valid seam, `editor-view.js` constructs this payload:
   technique,
   generatedNotes,
   evidence,
+  location,
   mode,
   question,
   history
@@ -123,6 +124,10 @@ When a transition technique is selected, the payload includes its registry ID, d
 #### Generated notes
 
 Generated notes come from the actual `compile()` output for the selected seam. This means GPT sees the final voice-led technique material that the learner hears, not merely an abstract technique name.
+
+#### Score location
+
+`location` identifies the focused measure and the measures occupied by the departing chord, generated transition, and arriving chord. Internal `measureIndex` values are zero-based, while `focusMeasureNumber` and all measure-number arrays are one-based to match the score labels a pianist sees. The prompt treats this location as authoritative and forbids inventing another measure.
 
 #### Mode and question
 
@@ -384,6 +389,7 @@ C Major → F Major · Secondary dominant
   technique,
   generatedNotes,
   evidence,
+  location,
   mode,
   question,
   history
@@ -401,6 +407,10 @@ C Major → F Major · Secondary dominant
 #### Generated notes
 
 Generated notes 直接来自该 seam 的 `compile()` 输出。因此 GPT 看到的是用户真正听到的、已经完成 voice-leading 的生成材料，而不是抽象的 technique 名称。
+
+#### 乐谱位置
+
+`location` 会指出当前聚焦的小节，以及离开和弦、生成过渡和到达和弦分别占据哪些小节。内部 `measureIndex` 从 0 开始，而 `focusMeasureNumber` 和所有小节编号数组从 1 开始，与演奏者在乐谱上看到的编号一致。Prompt 会把这些位置视为确定事实，并禁止虚构其他小节位置。
 
 #### Mode 与问题
 

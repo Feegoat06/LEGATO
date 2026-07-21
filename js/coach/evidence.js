@@ -13,6 +13,53 @@ function pitchClasses(notes) {
   return [...new Set(notes.map(pitchClassOf))].sort((a, b) => a - b);
 }
 
+function measureNumbers(segments, predicate) {
+  return [...new Set(segments
+    .filter(predicate)
+    .map((segment) => segment.measureIndex)
+    .filter(Number.isInteger))]
+    .sort((a, b) => a - b)
+    .map((measureIndex) => measureIndex + 1);
+}
+
+/**
+ * Describe where the selected transition sits in the score. Internal measure
+ * indexes remain available for deterministic UI alignment; display numbers are
+ * one-based so the model uses the same numbering a pianist sees.
+ */
+export function buildCoachLocation(progression, segments, seamIndex, focusedMeasureIndex = null) {
+  const fromChord = progression.chords[seamIndex];
+  const toChord = progression.chords[seamIndex + 1];
+  const departingChordMeasureNumbers = measureNumbers(
+    segments,
+    (segment) => segment.sourceId === fromChord?.id && !segment.isTechnique,
+  );
+  const transitionMeasureNumbers = measureNumbers(
+    segments,
+    (segment) => segment.seamIndex === seamIndex,
+  );
+  const arrivingChordMeasureNumbers = measureNumbers(
+    segments,
+    (segment) => segment.sourceId === toChord?.id && !segment.isTechnique,
+  );
+  const fallbackMeasureNumber = transitionMeasureNumbers.at(-1)
+    ?? departingChordMeasureNumbers.at(-1)
+    ?? arrivingChordMeasureNumbers[0]
+    ?? 1;
+  const safeFocusedIndex = Number.isInteger(focusedMeasureIndex) && focusedMeasureIndex >= 0
+    ? focusedMeasureIndex
+    : fallbackMeasureNumber - 1;
+
+  return {
+    focusMeasureIndex: safeFocusedIndex,
+    focusMeasureNumber: safeFocusedIndex + 1,
+    seamIndex,
+    departingChordMeasureNumbers,
+    transitionMeasureNumbers,
+    arrivingChordMeasureNumbers,
+  };
+}
+
 export function buildCoachEvidence(progression, segments, seamIndex) {
   const from = progression.chords[seamIndex];
   const to = progression.chords[seamIndex + 1];

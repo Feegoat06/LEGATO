@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { buildCoachLocation } from '../js/coach/evidence.js';
 import { buildSeamCoachPrompt } from '../js/coach/prompts.js';
 import {
   isAnswerResponse,
@@ -10,11 +11,38 @@ import {
 } from '../js/coach/coach.js';
 import { parseCoachResponse, responseFormatForMode } from '../api/coach.js';
 
-const base = { fromChord: { name: 'C Major', notes: [60, 64, 67] }, toChord: { name: 'F Major', notes: [65, 69, 72] }, generatedNotes: [60, 64, 67, 70], evidence: { commonPitchClasses: [0, 5] } };
+const base = {
+  fromChord: { name: 'C Major', notes: [60, 64, 67] },
+  toChord: { name: 'F Major', notes: [65, 69, 72] },
+  generatedNotes: [60, 64, 67, 70],
+  evidence: { commonPitchClasses: [0, 5] },
+  location: { focusMeasureIndex: 1, focusMeasureNumber: 2, seamIndex: 0 },
+};
 
 test('coach prompt includes exact voicings and generated notes', () => {
   const prompt = buildSeamCoachPrompt({ ...base, technique: { id: 'secondaryDom', name: 'Secondary dominant', beatCost: 1 } });
   assert.match(prompt, /\[60, 64, 67\]/); assert.match(prompt, /\[65, 69, 72\]/); assert.match(prompt, /\[60, 64, 67, 70\]/);
+  assert.match(prompt, /"focusMeasureNumber":2/);
+  assert.match(prompt, /measure numbers are one-based/i);
+});
+
+test('coach location reports focused and occupied measures using display numbering', () => {
+  const progression = { chords: [{ id: 'from' }, { id: 'to' }] };
+  const segments = [
+    { sourceId: 'from', isTechnique: false, seamIndex: null, measureIndex: 0 },
+    { sourceId: 'from', isTechnique: false, seamIndex: null, measureIndex: 1 },
+    { sourceId: 'transition', isTechnique: true, seamIndex: 0, measureIndex: 1 },
+    { sourceId: 'to', isTechnique: false, seamIndex: null, measureIndex: 2 },
+  ];
+
+  assert.deepEqual(buildCoachLocation(progression, segments, 0, 1), {
+    focusMeasureIndex: 1,
+    focusMeasureNumber: 2,
+    seamIndex: 0,
+    departingChordMeasureNumbers: [1, 2],
+    transitionMeasureNumbers: [2],
+    arrivingChordMeasureNumbers: [3],
+  });
 });
 
 test('coach prompt forbids key inference and identifies direct transitions', () => {

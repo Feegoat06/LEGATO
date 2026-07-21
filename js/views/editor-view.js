@@ -38,7 +38,7 @@ import {
   loadTenutinoContext,
   saveTenutinoContext,
 } from '../ui/tenutino.js';
-import { buildCoachEvidence } from '../coach/evidence.js';
+import { buildCoachEvidence, buildCoachLocation } from '../coach/evidence.js';
 import { requestCoach } from '../coach/coach.js';
 import { navigate, LANDING_HASH } from '../router.js';
 
@@ -412,12 +412,16 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         editor.render({ progression, selectedSeam, projectName: currentName });
         tutorChat.open(mode, { context: coachContextText() });
         const techniqueId = progression.seams[index];
+        const focusedMeasureIndex = tenutinoSeamIndex() === index
+          ? latestTenutinoContext?.measureIndex
+          : null;
         const payload = {
           fromChord: { name: chordDisplayName(progression.chords[index], progression.settings.key), notes: progression.chords[index].notes },
           toChord: { name: chordDisplayName(progression.chords[index + 1], progression.settings.key), notes: progression.chords[index + 1].notes },
           technique: techniqueId ? { id: techniqueId, ...TECHNIQUES[techniqueId] } : 'none',
           generatedNotes: segments.filter((segment) => segment.seamIndex === index).flatMap((segment) => segment.notes),
           evidence: buildCoachEvidence(progression, segments, index),
+          location: buildCoachLocation(progression, segments, index, focusedMeasureIndex),
           mode,
           question,
           history: tutorChat.getHistory().slice(-10),

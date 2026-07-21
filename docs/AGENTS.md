@@ -255,6 +255,7 @@ Keep the existing theory guardrails, with these refinements:
 - Target an intermediate-to-advanced pianist; do not describe the learner as a beginner.
 - Explain jargon briefly when it is first used, but do not oversimplify established concepts.
 - Ground factual claims in exact supplied notes and technique metadata.
+- Ground measure references in the supplied one-based score location; never infer or invent a measure number.
 - Distinguish observed facts from interpretive musical effect.
 - Never infer a global tonal center from `settings.key`; it applies its named sharps/flats to material, but is not proof of a tonal center.
 - Never claim a shared tone, resolved tendency tone, parsimonious movement, or bass motion unless the supplied MIDI notes support it.
@@ -308,7 +309,7 @@ Keep the complete response under 180 words. Be encouraging but specific. Briefly
 
 Do not train or fine-tune a model for the first sample. Accuracy will improve more quickly through grounded inputs and deterministic checks:
 
-1. Compute objective facts in code: pitch classes, bass and soprano motion, common tones, semitone motion, interval changes, beat costs, and generated notes.
+1. Compute objective facts in code: pitch classes, bass and soprano motion, common tones, semitone motion, interval changes, beat costs, generated notes, and score measure location.
 2. Pass those computed facts to GPT-5.6 as structured evidence.
 3. Ask GPT-5.6 to explain the facts pedagogically rather than rediscover them.
 4. Maintain a small golden set covering all eight techniques plus direct transitions.
