@@ -1,6 +1,6 @@
 # LEGATO
 
-LEGATO is an interactive AI music tutor for pianists. Build exact chord voicings, connect them with a harmonic technique, see and hear the compiled result, then ask why the transition works. The interface uses an editorial “sand hologram” composition-studio direction with Fraunces, Inter, and Space Grotesk.
+LEGATO is an interactive AI music tutor for pianists. Build exact chord voicings, connect them with a harmonic technique, see and hear the compiled result, then ask why the transition works. Tenutino also turns supported voice-leading moments into short prediction and A/B listening exercises, so learning happens through the music rather than only through chat. The interface uses an editorial “sand hologram” composition-studio direction with Fraunces, Inter, and Space Grotesk.
 
 ## Run locally
 
@@ -34,14 +34,16 @@ The UI mutates one `progression`. Pure `compile()` turns it into atomic segments
 
 Key areas: `js/state.js` (runtime contract), `js/engine/` (techniques, voice leading, rhythm), `js/notation/`, `js/audio/`, `js/ui/`, and `api/coach.js`.
 
+Tenutino's active-learning layer is deliberately separate from progression state. `js/coach/lesson.js` detects evidence-backed teachable moments and builds reversible comparison progressions; `js/coach/learner-profile.js` stores lightweight practice evidence locally. The deterministic music engine proposes, validates, and plays each comparison, GPT adds a grounded explanation, and only an explicit learner choice can replace a chord voicing.
+
 ## Test
 
 ```bash
 npm test
 ```
 
-Tests cover seam preservation, validation, all eight registry techniques, user-voicing integrity, generated-register choice, run beat caps, measure-relative timing, tempo and hint independence, coach grounding, schema failures, and API-key isolation.
+Tests cover seam preservation, validation, all eight registry techniques, user-voicing integrity, generated-register choice, run beat caps, measure-relative timing, tempo and hint independence, coach grounding, schema failures, API-key isolation, teachable-moment detection, reversible comparison construction, and learner-profile evidence.
 
 ## Current scope
 
-The first sample intentionally defers drag reordering, free-note chord naming, project storage/import/export, mood generation, accounts, and elaborate particle effects. When an explicit note set does not exactly match a supported quality, technique targeting uses the chord’s lowest note as a deterministic fallback root without adding fields to stored state.
+The current active-learning slice focuses on large top-voice motion. Additional concepts—such as common-tone recognition, semitone resolution, bass motion, and register balance—can be added as deterministic detectors without changing the progression contract. When an explicit note set does not exactly match a supported quality, technique targeting uses the chord’s lowest note as a deterministic fallback root without adding fields to stored state.
