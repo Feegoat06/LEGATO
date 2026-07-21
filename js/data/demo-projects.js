@@ -47,7 +47,13 @@ function make4536251PopProgression() {
     makeChord(notesFrom(60, 'Major'), 1, { rootMidi: 60, quality: 'Major' }), // I: C
   ];
   return makeProgression({
-    settings: { tempo: 96, timeSig: { num: 4, den: 4 }, key: 0, clef: 'auto' },
+    settings: {
+      tempo: 165,
+      timeSig: { num: 4, den: 4 },
+      key: 0,
+      clef: 'auto',
+      theme: { accent: '#B87FD9' },
+    },
     chords,
     seams: [
       'passingDim',
