@@ -40,18 +40,6 @@ import {
 } from '../ui/tenutino.js';
 import { buildCoachEvidence } from '../coach/evidence.js';
 import { requestCoach } from '../coach/coach.js';
-import {
-  applyLessonCandidate,
-  buildSopranoMotionLesson,
-  makeLessonComparisonProgression,
-} from '../coach/lesson.js';
-import {
-  conceptProgress,
-  loadLearnerProfile,
-  recordLessonDecision,
-  recordLessonPrediction,
-  saveLearnerProfile,
-} from '../coach/learner-profile.js';
 import { navigate, LANDING_HASH } from '../router.js';
 
 const SHELL_TEMPLATE = `
@@ -87,7 +75,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       let editingId = null;
       let selectedSeam = 0;
       let latestTenutinoContext = null;
-      let learnerProfile = loadLearnerProfile();
       const initialTenutinoContext = loadTenutinoContext(params.id, progression);
 
       // Apply per-project accent + chord-font to the document root so every
@@ -284,26 +271,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         callbacks: {
           onRetry(retry) { explainSeam(retry.index, retry); },
           onSubmit({ message, mode }) { askTutor(message, mode); },
-          onLessonPrediction({ lesson, prediction }) {
-            learnerProfile = recordLessonPrediction(learnerProfile, lesson, prediction);
-            saveLearnerProfile(learnerProfile);
-            tutorChat.setLessonProgress(conceptProgress(learnerProfile, lesson.concept));
-          },
-          onLessonPlay({ lesson, variant }) {
-            playLessonComparison(lesson, variant);
-          },
-          onLessonDecision({ lesson, decision }) {
-            finishLesson(lesson, decision);
-          },
-          onLessonExplain({ lesson }) {
-            explainSeam(lesson.seamIndex, {
-              mode: 'explain',
-              question: 'Explain the top-voice difference between the original and the closer comparison. Do not claim that closer is universally better.',
-            });
-          },
-          onLessonDismiss() {
-            stopLessonComparison();
-          },
         },
       });
 
@@ -488,75 +455,7 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
       }
 
       function askTutor(question, mode) {
-        explainSeam(tenutinoSeamIndex(), { mode: mode === 'lesson' ? 'ask' : mode, question });
-      }
-
-      function lessonForEdit(edit) {
-        if (!edit || progression.chords.length < 2) return null;
-        let indexes = [];
-        if (edit.type === 'seam') indexes = [edit.index];
-        if (edit.type === 'chord') {
-          const chordIndex = progression.chords.findIndex((chord) => chord.id === edit.chordId);
-          indexes = [chordIndex - 1, chordIndex];
-        }
-        return indexes
-          .filter((index) => index >= 0 && index < progression.seams.length)
-          .map((index) => buildSopranoMotionLesson(progression, index))
-          .filter(Boolean)
-          .sort((first, second) => Math.abs(second.originalMotion) - Math.abs(first.originalMotion))[0] ?? null;
-      }
-
-      async function playLessonComparison(lesson, variant) {
-        playbackRequest++;
-        stopPlayback();
-        setPlaybackState('idle');
-        sheetMusic.setActiveMeasure(null);
-        transport.setPlayEnabled(false);
-        tutorChat.setLessonPlaying(variant);
-        const comparison = makeLessonComparisonProgression(progression, lesson, variant);
-        const comparisonSegments = compile(comparison);
-        const settings = {
-          ...comparison.settings,
-          tempo: sheetMusic.getEffectiveSettings()?.tempo ?? comparison.settings.tempo,
-        };
-        try {
-          await playSegments(
-            comparisonSegments,
-            settings,
-            () => {},
-            () => {
-              tutorChat.setLessonPlaying(null);
-              transport.setPlayEnabled(true);
-            },
-          );
-        } catch (error) {
-          tutorChat.setLessonPlaying(null);
-          transport.setPlayEnabled(true);
-          console.error(error);
-        }
-      }
-
-      function stopLessonComparison() {
-        playbackRequest++;
-        stopPlayback();
-        tutorChat.setLessonPlaying(null);
-        setPlaybackState('idle');
-        transport.setPlayEnabled(true);
-      }
-
-      function finishLesson(lesson, decision) {
-        stopLessonComparison();
-        learnerProfile = recordLessonDecision(learnerProfile, lesson.id, decision);
-        saveLearnerProfile(learnerProfile);
-        tutorChat.completeLesson(decision);
-        if (decision !== 'adopted') return;
-
-        progression = applyLessonCandidate(progression, lesson);
-        selectedSeam = lesson.seamIndex;
-        rerender(
-          { type: 'chord', chordId: lesson.targetChordId },
-          { encourage: false, offerLesson: false },
-        );
+        explainSeam(tenutinoSeamIndex(), { mode, question });
       }
 
       function focusTenutino(edit, { encourage = true } = {}) {
@@ -608,7 +507,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         transport.setPlayEnabled(false);
         const playbackSettings = sheetMusic.getEffectiveSettings() ?? progression.settings;
         try {
-          tutorChat.setLessonPlaying(null);
           await Promise.all([
             preparePlaybackAudio(),
             sheetMusic.particles.ready(),
@@ -665,16 +563,13 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.tenutino.setPlaybackMeasure(null);
         sheetMusic.tenutino.returnToLatestEdit();
         tutorChat.setPlaybackActive(false);
-        tutorChat.setLessonPlaying(null);
         sheetMusic.setActiveMeasure(null);
         setPlaybackState('idle');
         transport.setPlayEnabled(true);
       }
 
       // ── Render pipeline ─────────────────────────────────────────────
-      function rerender(tenutinoEdit = null, { encourage = true, offerLesson = true } = {}) {
-        const nextLesson = offerLesson ? lessonForEdit(tenutinoEdit) : null;
-        if (nextLesson) selectedSeam = nextLesson.seamIndex;
+      function rerender(tenutinoEdit = null, { encourage = true } = {}) {
         playbackRequest++;
         stopPlayback();
         sheetMusic.particles.settle({ immediate: true });
@@ -689,12 +584,6 @@ export function createEditorView({ store, pianoDialog, projectSettingsDialog }) 
         sheetMusic.render(segments, progression.settings, progression.chords);
         focusTenutino(tenutinoEdit, { encourage });
         tutorChat.setContext(coachContextText());
-        if (nextLesson) {
-          sheetMusic.tenutino.say('I noticed a listening challenge here.');
-          tutorChat.offerLesson(nextLesson, {
-            progress: conceptProgress(learnerProfile, nextLesson.concept),
-          });
-        }
         scheduleAutosave();
       }
 

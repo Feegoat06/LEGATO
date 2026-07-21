@@ -25,12 +25,6 @@ const MODES = {
     empty: 'Ask about the last chord or transition you edited.',
     placeholder: 'Ask Tenutino something...',
   },
-  lesson: {
-    eyebrow: 'Listening challenge',
-    title: 'Train your ear',
-    empty: 'Make a musical edit and I will look for one useful thing to practise.',
-    placeholder: 'Ask a follow-up about this comparison...',
-  },
 };
 
 const MAX_HISTORY = 40;
@@ -80,42 +74,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
       </header>
       <p class="tutor-chat-context"></p>
       <div class="tutor-chat-messages" role="log" aria-live="polite" aria-relevant="additions">
-        <section class="tutor-lesson" aria-labelledby="tutor-lesson-title" hidden>
-          <header class="tutor-lesson-header">
-            <div>
-              <span>Active listening</span>
-              <h3 id="tutor-lesson-title">A voice-leading challenge</h3>
-            </div>
-            <button class="tutor-lesson-dismiss" type="button" aria-label="Dismiss listening challenge">Later</button>
-          </header>
-          <p class="tutor-lesson-observation"></p>
-          <div class="tutor-lesson-predict">
-            <p class="tutor-lesson-question"></p>
-            <div class="tutor-lesson-choices" role="group" aria-label="Choose your prediction">
-              <button type="button" data-lesson-prediction="original">Original</button>
-              <button type="button" data-lesson-prediction="candidate">Version B</button>
-              <button type="button" data-lesson-prediction="same">About the same</button>
-            </div>
-          </div>
-          <div class="tutor-lesson-result" hidden>
-            <p class="tutor-lesson-feedback" role="status"></p>
-            <div class="tutor-lesson-motion">
-              <span>Original <strong data-lesson-motion="original"></strong></span>
-              <span>Version B <strong data-lesson-motion="candidate"></strong></span>
-            </div>
-            <div class="tutor-lesson-playback" role="group" aria-label="Compare the two versions">
-              <button type="button" data-lesson-play="original">Play original</button>
-              <button type="button" data-lesson-play="candidate">Play version B</button>
-            </div>
-            <p class="tutor-lesson-caveat">Closer motion is not automatically better. Listen for the change, then choose the effect you prefer.</p>
-            <div class="tutor-lesson-actions">
-              <button type="button" data-lesson-decision="adopted">Use version B</button>
-              <button type="button" data-lesson-decision="kept-original">Keep original</button>
-              <button type="button" data-lesson-explain>Explain why</button>
-            </div>
-            <p class="tutor-lesson-progress"></p>
-          </div>
-        </section>
         <div class="tutor-chat-empty"></div>
       </div>
       <form class="tutor-chat-composer">
@@ -132,13 +90,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   const titleEl = container.querySelector('#tutor-chat-title');
   const contextEl = container.querySelector('.tutor-chat-context');
   const messagesEl = container.querySelector('.tutor-chat-messages');
-  const lessonEl = container.querySelector('.tutor-lesson');
-  const lessonObservationEl = lessonEl.querySelector('.tutor-lesson-observation');
-  const lessonQuestionEl = lessonEl.querySelector('.tutor-lesson-question');
-  const lessonPredictEl = lessonEl.querySelector('.tutor-lesson-predict');
-  const lessonResultEl = lessonEl.querySelector('.tutor-lesson-result');
-  const lessonFeedbackEl = lessonEl.querySelector('.tutor-lesson-feedback');
-  const lessonProgressEl = lessonEl.querySelector('.tutor-lesson-progress');
   const emptyEl = container.querySelector('.tutor-chat-empty');
   const form = container.querySelector('.tutor-chat-composer');
   const input = container.querySelector('#tutor-chat-input');
@@ -149,9 +100,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   let playbackActive = false;
   let loadingEl = null;
   let errorEl = null;
-  let lesson = null;
-  let lessonPlaying = null;
-  let lessonCompleted = false;
 
   function persist() {
     if (!storageKey) return;
@@ -177,73 +125,8 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
   }
 
   function syncEmptyState() {
-    emptyEl.hidden = history.length > 0 || Boolean(lesson);
+    emptyEl.hidden = history.length > 0;
     emptyEl.textContent = MODES[mode].empty;
-  }
-
-  function renderLessonPlayback() {
-    lessonEl.querySelectorAll('[data-lesson-play]').forEach((button) => {
-      const variant = button.dataset.lessonPlay;
-      button.disabled = Boolean(lessonPlaying);
-      button.textContent = lessonPlaying === variant
-        ? 'Playing…'
-        : variant === 'candidate' ? 'Play version B' : 'Play original';
-    });
-  }
-
-  function renderLesson(nextLesson, progress = null) {
-    lesson = nextLesson;
-    lessonCompleted = false;
-    lessonPlaying = null;
-    lessonEl.hidden = false;
-    lessonObservationEl.textContent = lesson.observation;
-    lessonQuestionEl.textContent = lesson.prompt;
-    lessonPredictEl.hidden = false;
-    lessonResultEl.hidden = true;
-    lessonProgressEl.textContent = progress?.attempts
-      ? `Top-voice listening practice: ${ progress.correct } of ${ progress.attempts } predictions supported by the note evidence.`
-      : 'Your first top-voice listening exercise.';
-    lessonEl.querySelector('[data-lesson-motion="original"]').textContent = `${ Math.abs(lesson.originalMotion) } semitones`;
-    lessonEl.querySelector('[data-lesson-motion="candidate"]').textContent = `${ Math.abs(lesson.candidateMotion) } semitones`;
-    lessonEl.querySelectorAll('[data-lesson-decision]').forEach((button) => { button.disabled = false; });
-    renderLessonPlayback();
-    syncEmptyState();
-  }
-
-  function handleLessonClick(event) {
-    if (!lesson) return;
-    const prediction = event.target.closest('[data-lesson-prediction]')?.dataset.lessonPrediction;
-    if (prediction) {
-      const correct = prediction === lesson.correctPrediction;
-      lessonPredictEl.hidden = true;
-      lessonResultEl.hidden = false;
-      lessonFeedbackEl.textContent = correct
-        ? 'Your prediction matches the notes: version B keeps the top voice closer.'
-        : 'Now test that prediction by ear. Version B has the smaller measured top-voice motion.';
-      callbacks.onLessonPrediction?.({ lesson, prediction, correct });
-      scrollToLatest();
-      return;
-    }
-
-    const variant = event.target.closest('[data-lesson-play]')?.dataset.lessonPlay;
-    if (variant && !lessonPlaying) {
-      callbacks.onLessonPlay?.({ lesson, variant });
-      return;
-    }
-
-    const decision = event.target.closest('[data-lesson-decision]')?.dataset.lessonDecision;
-    if (decision && !lessonCompleted) callbacks.onLessonDecision?.({ lesson, decision });
-    if (event.target.closest('[data-lesson-explain]')) callbacks.onLessonExplain?.({ lesson });
-  }
-
-  function dismissLesson() {
-    if (!lesson) return;
-    const dismissed = lesson;
-    lesson = null;
-    lessonPlaying = null;
-    lessonEl.hidden = true;
-    callbacks.onLessonDismiss?.({ lesson: dismissed });
-    syncEmptyState();
   }
 
   function renderHistory() {
@@ -320,9 +203,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
       form.requestSubmit();
     }
   });
-  lessonEl.addEventListener('click', handleLessonClick);
-  lessonEl.querySelector('.tutor-lesson-dismiss').addEventListener('click', dismissLesson);
-
   renderHistory();
 
   return {
@@ -345,30 +225,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
       scrollToLatest();
     },
     setResult(result) { append('assistant', result); },
-    offerLesson(nextLesson, { progress = null } = {}) {
-      if (!nextLesson || (lesson?.id === nextLesson.id && !lessonCompleted)) return;
-      renderLesson(nextLesson, progress);
-      open('lesson', { context: 'A prediction, two playable versions, and evidence from your exact notes.' });
-      scrollToLatest();
-    },
-    setLessonPlaying(variant) {
-      lessonPlaying = variant || null;
-      renderLessonPlayback();
-    },
-    setLessonProgress(progress) {
-      if (!lesson || !progress) return;
-      lessonProgressEl.textContent = `Top-voice listening practice: ${ progress.correct } of ${ progress.attempts } predictions supported by the note evidence.`;
-    },
-    completeLesson(decision) {
-      if (!lesson) return;
-      lessonCompleted = true;
-      lessonPlaying = null;
-      renderLessonPlayback();
-      lessonFeedbackEl.textContent = decision === 'adopted'
-        ? 'Version B is now in your progression. Your original was changed only after your choice.'
-        : 'Your original voicing stays in the progression. The comparison is saved in your learning record.';
-      lessonEl.querySelectorAll('[data-lesson-decision]').forEach((button) => { button.disabled = true; });
-    },
     setError(message, retryContext) {
       clearTransient();
       errorEl = document.createElement('div');
@@ -385,7 +241,6 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
       opener.removeEventListener('click', openFromOpener);
       document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
       form.removeEventListener('submit', submitMessage);
-      lessonEl.removeEventListener('click', handleLessonClick);
       container.replaceChildren();
     },
   };
