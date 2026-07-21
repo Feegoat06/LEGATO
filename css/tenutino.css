@@ -26,6 +26,17 @@
     display: none
 }
 
+/* Keep the menu's visual breathing room without breaking the hover path from
+   Tenutino to its actions. */
+.tenutino-root::after {
+    position: absolute;
+    top: 0;
+    left: 100%;
+    width: 10px;
+    height: 100%;
+    content: ''
+}
+
 .tenutino-root.is-teleporting,
 .tenutino-root.is-dragging {
     transition: none
