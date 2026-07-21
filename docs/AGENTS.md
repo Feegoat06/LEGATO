@@ -260,25 +260,34 @@ Keep the existing theory guardrails, with these refinements:
 - Never claim a shared tone, resolved tendency tone, parsimonious movement, or bass motion unless the supplied MIDI notes support it.
 - When the data is insufficient, state the limitation plainly.
 
-Recommended response schema for reliable UI parsing:
+Use a separate response contract for each Tutor mode:
 
-```json
-{
+```jsonc
+// Explain
+{ "type": "explanation",
   "whatYouHear": "string",
   "whyItWorks": "string",
   "tryThis": "string",
-  "reflect": "string"
-}
+  "reflect": "string" }
+
+// Suggestions
+{ "type": "suggestion", "suggestion": "string", "reason": "string" }
+
+// Ask transport envelope; the model itself returns natural plain text
+{ "type": "answer", "answer": "string" }
 ```
 
 Required educational roles:
 
 - `whatYouHear`: describe the perceived effect in one or two sentences.
 - `whyItWorks`: explain supported harmonic, melodic, rhythmic, or voice-leading details.
-- `tryThis`: give one listening or playing experiment.
+- `tryThis`: give one listening or playing experiment in Explain mode.
 - `reflect`: ask one short learner question that encourages comparison or prediction.
+- `suggestion`: give one concrete change the learner can manually try.
+- `reason`: briefly explain the suggestion using supplied evidence.
+- `answer`: preserve the model's natural conversational answer without fixed educational headings.
 
-Validate this schema on the server. If structured output fails, return a safe error instead of rendering partially trusted fields.
+Validate the selected mode and its response on the server. Use strict structured output for Explain and Suggestions, and plain model text wrapped by the server for Ask. If validation fails, return a safe error instead of rendering partially trusted fields.
 
 ### Suggested server-side prompt
 
@@ -287,11 +296,10 @@ You are LEGATO, a warm, concise AI music tutor for an intermediate-to-advanced p
 
 Use accurate, practical music-theory language. Explain only what is supported by the supplied chord, voicing, generated-note, rhythm, and transition data. Never invent notes, extensions, tonal centers, keys, functional labels, or voice-leading details. The score's key-signature setting controls spelling and is not proof of a tonal center. If a technique is absent, ambiguous, or unsupported by the data, state that plainly.
 
-Return valid JSON with exactly four string fields:
-- whatYouHear: 1–2 sentences describing the musical effect.
-- whyItWorks: 2–4 sentences explaining supported harmonic, melodic, rhythmic, or voice-leading details.
-- tryThis: one actionable listening or playing experiment.
-- reflect: one concise question asking the learner to compare, predict, or evaluate the transition.
+Match the requested Tutor mode:
+- Explain: strict JSON containing type=explanation, whatYouHear, whyItWorks, tryThis, and reflect.
+- Suggestions: strict JSON containing type=suggestion, one concrete suggestion, and a brief reason.
+- Ask: answer the learner naturally in plain text without fixed headings or JSON.
 
 Keep the complete response under 180 words. Be encouraging but specific. Briefly explain specialized terminology when useful. Do not use generic praise.
 ```
@@ -359,7 +367,7 @@ The first sample is complete only when all of the following are true:
 - Ineligible techniques are disabled or hidden based on the departing chord's available beat budget.
 - The current measure receives a basic visual highlight during playback.
 - The selected seam can be sent to GPT-5.6 through the server endpoint.
-- The coach returns four grounded educational fields: what is heard, why it works, an experiment, and a reflection question.
+- The coach returns the validated mode-specific response: a four-section explanation, a suggestion with a reason, or a natural Ask answer.
 - Coach failure does not break composition, notation, or playback.
 - The two non-negotiable silent-failure tests pass.
 - The README lets another developer run the app and tests from a clean clone.
@@ -373,9 +381,9 @@ Suggested demonstration sequence:
 1. Load the example and play the direct transition.
 2. Select one block-chord technique, such as `secondaryDom`, and replay.
 3. Open the coach explanation and show all four educational fields.
-4. Follow the suggested playing experiment by changing one voicing.
-5. Replay and compare.
-6. Optionally switch to `scaleRun` to demonstrate melodic connective material.
+4. Open Suggestions to show one focused alternative and its reason.
+5. Ask Tenutino a follow-up and show its natural conversational answer.
+6. Try the suggestion, replay, and compare.
 
 Do not claim that one transition is universally “better.” Describe how the musical effect changes and let the pianist compare alternatives.
 

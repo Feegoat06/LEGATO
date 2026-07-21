@@ -30,7 +30,7 @@ Never put the key in client code. `server.mjs` serves the local API route; `api/
 
 ## Architecture
 
-The UI mutates one `progression`. Pure `compile()` turns it into atomic segments with exact pitches and timing. VexFlow notation, Tone.js playback, highlighting, and coach grounding all consume that same segment list. User MIDI voicings are never altered; generated technique material alone uses closest-voicing search. Coach responses are server-validated into `whatYouHear`, `whyItWorks`, `tryThis`, and `reflect` before rendering.
+The UI mutates one `progression`. Pure `compile()` turns it into atomic segments with exact pitches and timing. VexFlow notation, Tone.js playback, highlighting, and coach grounding all consume that same segment list. User MIDI voicings are never altered; generated technique material alone uses closest-voicing search. Coach responses are mode-specific: Explain uses four educational sections, Suggestions uses one idea plus a brief reason, and Ask returns a natural conversational answer. The server and client validate each mode before rendering.
 
 Key areas: `js/state.js` (runtime contract), `js/engine/` (techniques, voice leading, rhythm), `js/notation/`, `js/audio/`, `js/ui/`, and `api/coach.js`.
 

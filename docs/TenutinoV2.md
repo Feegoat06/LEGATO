@@ -58,13 +58,13 @@ Understand the transition
 
 #### Suggestions
 
-`Suggestions` also sends an immediate request, but the prompt tells GPT to make `tryThis` a concrete musical alternative that the learner can audition or play.
+`Suggestions` also sends an immediate request. It returns one concrete musical change followed by a short, evidence-grounded reason.
 
 This mode currently returns text. It does not mutate the progression or create an executable edit.
 
 #### Ask Tenutino
 
-`Ask Tenutino` opens the drawer and focuses the text composer. It does not call GPT until the learner submits a question.
+`Ask Tenutino` opens the drawer and focuses the text composer. It does not call GPT until the learner submits a question. Its reply is natural prose rather than a fixed educational card.
 
 Enter submits the message; Shift+Enter creates a new line. Questions are limited to 600 characters.
 
@@ -167,12 +167,13 @@ It instructs GPT to:
 
 The prompt includes recent conversation, but the theory guardrails remain the governing instructions. User text is JSON-encoded inside the prompt and labeled as untrusted learner content.
 
-### 7. Required response shape
+### 7. Mode-specific response shapes
 
-GPT must return strict JSON with exactly four non-empty strings:
+Explain mode uses strict JSON with five non-empty strings, including a type discriminator:
 
 ```json
 {
+  "type": "explanation",
   "whatYouHear": "...",
   "whyItWorks": "...",
   "tryThis": "...",
@@ -185,7 +186,17 @@ GPT must return strict JSON with exactly four non-empty strings:
 - `tryThis`: one actionable listening or playing experiment. In Suggest mode, it should be a concrete alternative.
 - `reflect`: one short comparison, prediction, or evaluation question.
 
-The complete response is requested to stay under 180 words and avoid generic praise.
+Suggestions uses a smaller strict structure:
+
+```json
+{
+  "type": "suggestion",
+  "suggestion": "One concrete musical change",
+  "reason": "A brief explanation grounded in the supplied notes"
+}
+```
+
+Ask mode requests natural plain text without JSON or fixed headings. The server wraps that text as `{ type: "answer", answer: "..." }` only for safe transport and client validation. Explain and Ask responses stay under 180 words; Suggestions stays under 100 words. All modes avoid generic praise and retain the same theory guardrails.
 
 ### 8. Server request and validation
 
@@ -203,18 +214,18 @@ The server:
 3. Calls the OpenAI Responses API.
 4. Uses `OPENAI_MODEL` or defaults to `gpt-5.6`.
 5. Limits output to 700 tokens.
-6. Requests strict JSON Schema output.
+6. Selects the response contract from `mode`: strict JSON Schema for Explain and Suggestions, plain text for Ask.
 7. Extracts and parses the returned text.
 8. Applies a second application-level shape check.
-9. Returns `{ explanation }` to the browser.
+9. Returns `{ mode, reply }` to the browser.
 
 The API key remains server-side and never appears in client configuration.
 
-Both server and client validate the four-field response. Missing fields, empty strings, malformed JSON, or additional fields are rejected rather than partially rendered.
+Both server and client validate the selected mode and its response envelope. Missing fields, empty strings, malformed structured JSON, additional structured fields, or a mode mismatch are rejected rather than partially rendered.
 
 ### 9. Rendering and conversation memory
 
-Successful responses render as four labeled sections:
+Explain responses render as four labeled sections:
 
 ```text
 WHAT YOU HEAR
@@ -222,6 +233,8 @@ WHY IT WORKS
 TRY THIS
 REFLECT
 ```
+
+Suggestions renders only `TRY THIS` and `WHY`. Ask renders one natural answer bubble and preserves line breaks without imposing section labels.
 
 All user and model content is HTML-escaped before insertion into the page.
 
@@ -231,7 +244,7 @@ Conversation history is stored per project under:
 legato:tutor-chat:<projectId>
 ```
 
-The drawer keeps at most 40 valid messages. An entry may contain a user string, an assistant string, or a complete four-field coach object. Invalid stored entries are discarded when history is restored.
+The drawer keeps at most 40 valid messages. An entry may contain a user string, a legacy assistant string, or a validated explanation, suggestion, or answer object. Invalid stored entries are discarded when history is restored.
 
 The editor supplies up to the latest ten entries to the prompt builder; the prompt builder retains the latest eight. Only `role` and `content` are sent to the model.
 
@@ -323,13 +336,13 @@ Understand the transition
 
 #### Suggestions
 
-`Suggestions` 也会立即发送请求，但 Prompt 会要求 GPT 在 `tryThis` 中提供一个用户能够试听或演奏的具体替代方向。
+`Suggestions` 也会立即发送请求。它会返回一个具体的音乐修改建议，以及一段基于现有音符证据的简短原因。
 
 当前 Suggestions 只返回文字，不会修改 progression，也不会自动创建可执行编辑。
 
 #### Ask Tenutino
 
-`Ask Tenutino` 只打开聊天抽屉并聚焦输入框，不会立刻调用 GPT。用户提交问题后才会发送请求。
+`Ask Tenutino` 只打开聊天抽屉并聚焦输入框，不会立刻调用 GPT。用户提交问题后才会发送请求。回答使用自然文本，不强制显示为固定的教学卡片。
 
 Enter 发送消息，Shift+Enter 换行。问题最多 600 个字符。
 
@@ -432,12 +445,13 @@ GPT 被要求：
 
 Prompt 会包含最近对话，但理论限制仍然是主导指令。用户输入会先转换成 JSON 字符串，并被标记为不可信的 learner content。
 
-### 7. 强制响应结构
+### 7. 不同模式的响应结构
 
-GPT 必须返回严格 JSON，而且只能包含四个非空字符串：
+Explain 模式使用严格 JSON，其中包含类型标记和四个教学字段：
 
 ```json
 {
+  "type": "explanation",
   "whatYouHear": "...",
   "whyItWorks": "...",
   "tryThis": "...",
@@ -450,7 +464,17 @@ GPT 必须返回严格 JSON，而且只能包含四个非空字符串：
 - `tryThis`：提供一个可执行的聆听或演奏实验。在 Suggest 模式中应给出具体替代方向。
 - `reflect`：提出一个简短的比较、预测或评价问题。
 
-完整回答被要求控制在 180 个英文单词以内，并避免空泛表扬。
+Suggestions 使用更简洁的严格结构：
+
+```json
+{
+  "type": "suggestion",
+  "suggestion": "一个具体的音乐修改建议",
+  "reason": "根据现有音符给出的简短解释"
+}
+```
+
+Ask 模式要求模型直接返回自然文本，不使用 JSON，也不强制套用固定标题。服务器只会为了安全传输和客户端验证，把文本包装成 `{ type: "answer", answer: "..." }`。Explain 和 Ask 控制在 180 个英文单词以内，Suggestions 控制在 100 个英文单词以内。三个模式继续共享相同的乐理限制。
 
 ### 8. 服务器请求与验证
 
@@ -468,18 +492,18 @@ Content-Type: application/json
 3. 调用 OpenAI Responses API。
 4. 使用 `OPENAI_MODEL`，未配置时默认 `gpt-5.6`。
 5. 将最大输出限制为 700 tokens。
-6. 请求 strict JSON Schema 输出。
+6. 根据 `mode` 选择响应契约：Explain 和 Suggestions 使用 strict JSON Schema，Ask 使用自然文本。
 7. 提取并解析模型文本。
 8. 再执行一次应用层结构验证。
-9. 向浏览器返回 `{ explanation }`。
+9. 向浏览器返回 `{ mode, reply }`。
 
 API Key 始终保留在服务器端，不会进入浏览器配置。
 
-服务器和客户端都会验证四字段响应。字段缺失、空字符串、非法 JSON 或额外字段都会被拒绝，而不是部分渲染。
+服务器和客户端都会验证当前模式及其响应包装。字段缺失、空字符串、结构化 JSON 非法、出现额外结构化字段或模式不匹配时，响应都会被拒绝，而不是部分渲染。
 
 ### 9. 渲染与对话记忆
 
-成功响应会显示为四个区块：
+Explain 响应会显示为四个区块：
 
 ```text
 WHAT YOU HEAR
@@ -487,6 +511,8 @@ WHY IT WORKS
 TRY THIS
 REFLECT
 ```
+
+Suggestions 只显示 `TRY THIS` 和 `WHY`。Ask 显示为一个自然回答气泡，保留换行，但不强制加入区块标题。
 
 所有用户内容和模型内容在进入 DOM 前都会进行 HTML escaping。
 
@@ -496,7 +522,7 @@ REFLECT
 legato:tutor-chat:<projectId>
 ```
 
-聊天抽屉最多保存 40 条有效消息。一条记录可以是用户字符串、Assistant 字符串，或者完整的四字段 Coach 对象。恢复历史时会丢弃非法记录。
+聊天抽屉最多保存 40 条有效消息。一条记录可以是用户字符串、旧版 Assistant 字符串，或者经过验证的 explanation、suggestion 或 answer 对象。恢复历史时会丢弃非法记录。
 
 编辑器最多把最近 10 条历史交给 Prompt Builder，Prompt Builder 最终保留最近 8 条。发送给模型的历史只包含 `role` 和 `content`。
 

@@ -12,8 +12,8 @@ createServer(async (request, response) => {
     if (request.url === '/api/coach.js') {
       if (request.method !== 'POST') { response.writeHead(405, { 'Content-Type': 'application/json' }); return response.end(JSON.stringify({ error: 'Method not allowed.' })); }
       let body = ''; for await (const chunk of request) body += chunk;
-      const explanation = await generateCoachResponse(JSON.parse(body || '{}'));
-      response.writeHead(200, { 'Content-Type': 'application/json' }); return response.end(JSON.stringify({ explanation }));
+      const result = await generateCoachResponse(JSON.parse(body || '{}'));
+      response.writeHead(200, { 'Content-Type': 'application/json' }); return response.end(JSON.stringify(result));
     }
     const pathname = request.url === '/' ? '/index.html' : decodeURIComponent(request.url.split('?')[0]);
     const path = normalize(join(root, pathname));

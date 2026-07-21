@@ -196,6 +196,10 @@
     font: 400 var(--fs-copy)/1.55 var(--font-body)
 }
 
+.tutor-message .tutor-answer {
+    white-space: pre-wrap
+}
+
 .tutor-message.is-user {
     margin-left: auto;
     border-color: var(--accent-border);

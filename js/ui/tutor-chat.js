@@ -4,6 +4,11 @@
  * Conversation state stays local to the browser and is restored per project.
  */
 import { escapeHtml } from '../util/html.js';
+import {
+  isAnswerResponse,
+  isExplanationResponse,
+  isSuggestionResponse,
+} from '../coach/coach.js';
 import { icon } from './icons.js';
 
 const MODES = {
@@ -32,9 +37,12 @@ const MAX_HISTORY = 40;
 function validHistoryEntry(entry) {
   if (!entry || !['user', 'assistant'].includes(entry.role)) return false;
   if (typeof entry.content === 'string') return true;
-  const resultKeys = ['whatYouHear', 'whyItWorks', 'tryThis', 'reflect'];
+  if (isExplanationResponse(entry.content)
+    || isSuggestionResponse(entry.content)
+    || isAnswerResponse(entry.content)) return true;
+  const legacyExplanationKeys = ['whatYouHear', 'whyItWorks', 'tryThis', 'reflect'];
   return entry.content && typeof entry.content === 'object'
-    && resultKeys.every((key) => typeof entry.content[key] === 'string');
+    && legacyExplanationKeys.every((key) => typeof entry.content[key] === 'string');
 }
 
 function readHistory(storageKey) {
@@ -48,6 +56,15 @@ function readHistory(storageKey) {
 }
 
 function resultMarkup(result) {
+  if (result.type === 'suggestion') {
+    return `
+      <div class="tutor-result-section"><span>Try this</span><p>${ escapeHtml(result.suggestion) }</p></div>
+      <div class="tutor-result-section"><span>Why</span><p>${ escapeHtml(result.reason) }</p></div>
+    `;
+  }
+  if (result.type === 'answer') {
+    return `<p class="tutor-answer">${ escapeHtml(result.answer) }</p>`;
+  }
   return `
     <div class="tutor-result-section"><span>What you hear</span><p>${ escapeHtml(result.whatYouHear) }</p></div>
     <div class="tutor-result-section"><span>Why it works</span><p>${ escapeHtml(result.whyItWorks) }</p></div>
@@ -220,7 +237,12 @@ export function mountTutorChat({ container, callbacks = {}, storageKey = '' }) {
       clearTransient();
       loadingEl = document.createElement('div');
       loadingEl.className = 'tutor-chat-loading';
-      loadingEl.innerHTML = '<span class="spinner"></span><p>Tracing the exact voices and generated notes...</p>';
+      const loadingCopy = mode === 'suggest'
+        ? 'Finding one practical change to try...'
+        : mode === 'ask'
+          ? 'Thinking about your question...'
+          : 'Tracing the exact voices and generated notes...';
+      loadingEl.innerHTML = `<span class="spinner"></span><p>${ loadingCopy }</p>`;
       messagesEl.append(loadingEl);
       scrollToLatest();
     },
